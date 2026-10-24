@@ -5573,6 +5573,69 @@ do
         return "No Signature Keystone", "Choose one of your class keystones."
     end)
 
+    -- ======================= Experience rate (0.33) =======================
+    -- levelling only: from Off up to the server's own rate; Paragon is never touched
+    local function BuildXpRate()
+        local b = Button(tierS, 126, 22, "Experience")
+        b:SetPoint("TOPRIGHT", tierS, "TOPRIGHT", -14, -201)
+        local pop = CreateFrame("Frame", "WorldTiersXpRateFrame", win)
+        Size(pop, 300, 120)
+        pop:SetPoint("TOPLEFT", b, "BOTTOMLEFT", -170, -4)
+        pop:SetFrameStrata("DIALOG")
+        pop:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                          tile = true, tileSize = 16, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+        pop:EnableMouse(true)
+        pop:Hide()
+        local title = Text(pop, "GameFontNormal", 14, -12, 272)
+        title:SetText("Levelling Experience")
+        local slider = CreateFrame("Slider", "WorldTiersXpRateSlider", pop, "OptionsSliderTemplate")
+        Size(slider, 260, 16)
+        slider:SetPoint("TOP", 0, -42)
+        slider:SetValueStep(1)
+        local low, high = _G["WorldTiersXpRateSliderLow"], _G["WorldTiersXpRateSliderHigh"]
+        local value = _G["WorldTiersXpRateSliderText"]
+        local note = Text(pop, "GameFontDisableSmall", 14, -72, 272)
+        note:SetText("Levels 1-80 only. Paragon is never affected. World Tier and event bonuses still add on top.")
+        local setB = Button(pop, 80, 22, "Set")
+        setB:SetPoint("BOTTOMRIGHT", -12, 10)
+        local function Label(v, max)
+            if v <= 0 then return "Off (no experience)" end
+            if v >= max then return string.format("%dx (the server's rate)", v) end
+            return string.format("%dx%s", v, v == 1 and " (as the game was made)" or "")
+        end
+        slider:SetScript("OnValueChanged", function(self, v)
+            v = math.floor(v + 0.5)
+            if value then value:SetText(Label(v, hub.xp.max)) end
+        end)
+        setB:SetScript("OnClick", function()
+            Send("WL:" .. math.floor(slider:GetValue() + 0.5))
+            pop:Hide()
+        end)
+        b:SetScript("OnClick", function()
+            if pop:IsShown() then pop:Hide() return end
+            slider:SetMinMaxValues(0, hub.xp.max)
+            if low then low:SetText("Off") end
+            if high then high:SetText(hub.xp.max .. "x") end
+            slider:SetValue(hub.xp.cur)
+            if value then value:SetText(Label(hub.xp.cur, hub.xp.max)) end
+            pop:Show()
+        end)
+        TipOn(b, function()
+            return "Experience rate", string.format("How fast you level: from Off up to the server's %dx. Kills, quests and exploration. "
+                .. "Paragon experience is never affected. Also /wtxp <rate>.", hub.xp.max)
+        end)
+        local function Refresh()
+            local x = hub.xp
+            if not x.on then b:Hide() return end
+            b:Show()
+            b:SetText(x.cur <= 0 and "Experience: Off" or string.format("Experience: %dx", x.cur))
+            if x.atCap then b:Disable() else b:Enable() end
+        end
+        return Refresh
+    end
+    hub.xp = { cur = 10, max = 10, on = false, atCap = false }
+    local RefreshXpRate = BuildXpRate()
+
     -- ======================= Ascendancy =======================
     -- (the right half beside the Signature Keystone; the four to choose from
     -- are in the Ascendancy window, ascend.lua)
@@ -6202,13 +6265,22 @@ do
         if hub.RefreshVault then hub.RefreshVault() end
         if hub.RefreshEvents then hub.RefreshEvents() end
         RefreshAscendancy()
+        RefreshXpRate()
         auraB:SetText(WT.ksAuras == false and "Keystone Auras: |cffff6666Off|r" or "Keystone Auras: |cff66ff66On|r")
     end
     WT.RefreshHubAuras = function() if win:IsShown() then Refresh() end end
 
     BuildPages()
     win:SetScript("OnShow", function() PlaySound("igCharacterInfoOpen") end)
-    win:SetScript("OnHide", function() PlaySound("igCharacterInfoClose") picker:Hide() end)
+    win:SetScript("OnHide", function() PlaySound("igCharacterInfoClose") picker:Hide() if WorldTiersXpRateFrame then WorldTiersXpRateFrame:Hide() end end)
+
+    SLASH_WORLDTIERSXP1 = "/wtxp"
+    SlashCmdList["WORLDTIERSXP"] = function(arg)
+        local n = tonumber((arg or ""):match("%d+"))
+        if (arg or ""):lower():find("off") then n = 0 end
+        if n then Send("WL:" .. n)
+        else DEFAULT_CHAT_FRAME:AddMessage("|cffff9933World Tiers:|r /wtxp <rate>, from 0 (off) up to the server's rate, while levelling.") end
+    end
 
     local wantOpen = false
     function WT.OpenHub()
@@ -6219,7 +6291,7 @@ do
 
     -- WW| WH| WK| WP| WR| WS| WO| WE| WZ| WC|
     function WT.OnHubMessage(msg)
-        local cmd = msg:match("^(W[WHKPRSOEZCV])|") or msg:match("^(V[RTO])|") or msg:match("^(E[ZDXWN])|")
+        local cmd = msg:match("^(W[WHKPRSOEZCVL])|") or msg:match("^(V[RTO])|") or msg:match("^(E[ZDXWN])|")
         if not cmd then return false end
         local f = Split(msg:sub(4), "|")
         if cmd == "WW" then
@@ -6277,6 +6349,9 @@ do
             WT.ksAuras = f[3] ~= "0"
         elseif cmd == "WO" then
             hub.options[#hub.options + 1] = { ks = tonumber(f[1]), level = tonumber(f[2]) or 1, name = f[3] or "", text = f[4] or "", icon = f[5] or "INV_Misc_QuestionMark" }
+        elseif cmd == "WL" then
+            -- WL|chosen|highest|at the cap
+            hub.xp = { cur = tonumber(f[1]) or 0, max = math.max(1, tonumber(f[2]) or 1), on = true, atCap = f[3] == "1" }
         elseif cmd == "WE" then
             Refresh()
             if wantOpen then
@@ -6380,7 +6455,7 @@ end
 -- ---------------------------------------------------------------------------
 
 do
-    WT.CLIENT_VERSION = "0.32"
+    WT.CLIENT_VERSION = "0.33"
     local warned = false
     StaticPopupDialogs["WORLDTIERS_OUTDATED"] = {
         text = "|cffff9933Your IsDead WoW client files are out of date.|r\n\n%s\n\nClose the game and start it with |cffffffffIsDead Launcher|r: it updates everything by itself.",
