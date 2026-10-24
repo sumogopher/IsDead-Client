@@ -1,6 +1,6 @@
 {
-  "version": "0.35",
-  "cacheVersion": "9e5869f23f5903ff",
+  "version": "0.36",
+  "cacheVersion": "a2d9a5c951fc9c0b",
   "realmlist": "26.148.25.63",
   "news": "",
   "managedDirs": [
@@ -10,14 +10,34 @@
   "files": [
     {
       "path": "Data/enUS/patch-enUS-W.MPQ",
-      "size": 4928047,
-      "sha256": "ef64d85b2c7e7b1daf4dabcaad55ab29af155f6d73740c38b763a7ab8cc87704",
+      "size": 6408388,
+      "sha256": "1acb5962cceeb2b398f101ec0fe06bf9712a09c28732c042896b6755b478d342",
       "localized": true
     },
     {
       "path": "Data/Patch-A.MPQ",
       "size": 26685,
       "sha256": "b0d920ea5a8a7c2d592328d8bc64c5d4aa43c06efe0a92318312165d3608d305"
+    },
+    {
+      "path": "Data/patch-M.MPQ",
+      "size": 55353146,
+      "sha256": "5a72e919599a7199f20e7d39ff72b4b85e245f559c8771df4ed434ea6b4cf8ac"
+    },
+    {
+      "path": "Data/patch-N.MPQ",
+      "size": 62537238,
+      "sha256": "96be0c350a047f22460cb782ae7d0f433cee817a558ca3e7bd20bf93cff82c8e"
+    },
+    {
+      "path": "Data/patch-O.MPQ",
+      "size": 59688894,
+      "sha256": "8cf3700055c2d2d7abba8d28a6f4a182d62187463b8b2cb394cfaed3077c21eb"
+    },
+    {
+      "path": "Data/patch-P.MPQ",
+      "size": 14524744,
+      "sha256": "47c40b526ab6259e5b36790d56510edb7a40305c4efbfc9116cee9e13feb5ca5"
     },
     {
       "path": "Interface/AddOns/Atlas/Atlas.lua",
@@ -762,12 +782,12 @@
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.lua",
       "size": 321698,
-      "sha256": "57f1672835fc43bbfe54a197352bd880d75c0282eefa2d9548ab35ed6832ea81"
+      "sha256": "8eda10c6d182ecd20aa9a0073a99930e9d85c34ef655367f2901ad8e6c62507f"
     },
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.toc",
       "size": 512,
-      "sha256": "fa7552b7af988c172bcb8bcf271f67c9b3414bbdba610a14e28f39a51c631108"
+      "sha256": "91bb27cfb5b88709f4e4aa15b73feac6ffb89b4e851de0074143a423515e545c"
     },
     {
       "path": "IsDeadLauncher.ps1",
