@@ -2309,6 +2309,85 @@ hooksecurefunc(GameTooltip, "SetInventoryItem", function(tip, unit, invSlot)
     Lookup(tip, bag, slot, GetInventoryItemLink("player", invSlot), function() tip:SetInventoryItem("player", invSlot) end)
 end)
 
+-- An item in the loot window (0.34): the server rolls it as you look, and
+-- the tooltip shows what it will be; looting it gives exactly that.
+local lootCache, lootPending = {}, {}
+hooksecurefunc(GameTooltip, "SetLootItem", function(tip, slot)
+    local link = GetLootSlotLink and GetLootSlotLink(slot)
+    local id = link and tonumber(link:match("item:(%d+)"))
+    if not id then return end
+    local key = "L:" .. id
+    tip.wtKey, tip.wtRedo, tip.wtDone = key, function() tip:SetLootItem(slot) end, nil
+    if lootCache[id] then
+        tip.wtDone = true
+        Decorate(tip, lootCache[id])
+        return
+    end
+    local now = GetTime()
+    if not lootPending[id] or now - lootPending[id] > 2 then
+        lootPending[id] = now
+        Send("IL:" .. id)
+    end
+end)
+-- LX|entry|rarity|text ... LP|entry|scaled|effIlvl|ownIlvl|stat|dps|armor|tier|power
+local lootAffixes = {}
+function WT.OnLootPreviewMessage(msg)
+    local cmd = msg:sub(1, 3)
+    if cmd ~= "LX|" and cmd ~= "LP|" then return false end
+    local f = Split(msg:sub(4), "|")
+    local id = tonumber(f[1])
+    if not id then return true end
+    if cmd == "LX|" then
+        lootAffixes[id] = lootAffixes[id] or {}
+        table.insert(lootAffixes[id], { rarity = tonumber(f[2]) or 0, text = f[3] or "" })
+        return true
+    end
+    lootCache[id] = {
+        scaled = f[2] == "1", eff = tonumber(f[3]) or 0, own = tonumber(f[4]) or 0,
+        stat = tonumber(f[5]) or 1, dps = tonumber(f[6]) or 1, armor = tonumber(f[7]) or 1,
+        tier = f[8] or "", power = f[9] or "", affixes = lootAffixes[id] or {},
+    }
+    lootAffixes[id], lootPending[id] = nil, nil
+    if WT.PaintLootGlows then WT.PaintLootGlows() end   -- a unique or set piece glows in the loot window
+    if GameTooltip:IsShown() and GameTooltip.wtKey == "L:" .. id and not GameTooltip.wtDone then
+        GameTooltip.wtDone = true
+        Decorate(GameTooltip, lootCache[id])
+    end
+    return true
+end
+-- what a loot window item will be, if it has been rolled: "U" a unique, "S" a set piece, "B" both (nil: neither)
+function WT.LootItemKind(id)
+    local info = id and lootCache[id]
+    if not info then return nil end
+    local u, st
+    for _, a in ipairs(info.affixes) do
+        u = u or a.rarity == 6
+        st = st or a.rarity == 7
+    end
+    return (u and st) and "B" or u and "U" or st and "S" or nil
+end
+-- a new loot window: new rolls, asked for every item at once (so a unique or
+-- set piece glows before you even look); the server keeps each roll, so
+-- reopening shows the same ones
+do
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("LOOT_OPENED")
+    f:RegisterEvent("LOOT_CLOSED")
+    f:SetScript("OnEvent", function(self, event)
+        lootCache, lootPending, lootAffixes = {}, {}, {}
+        if event ~= "LOOT_OPENED" or not GetNumLootItems then return end
+        local now = GetTime()
+        for slot = 1, GetNumLootItems() do
+            local link = GetLootSlotLink and GetLootSlotLink(slot)
+            local id = link and tonumber(link:match("item:(%d+)"))
+            if id and not lootPending[id] then
+                lootPending[id] = now
+                Send("IL:" .. id)
+            end
+        end
+    end)
+end
+
 GameTooltip:HookScript("OnTooltipCleared", function(tip) tip.wtKey, tip.wtRedo, tip.wtDone = nil, nil, nil ResetBorder(tip) end)
 
 -- A comparison tooltip shows one of your equipped items: find which slot, and
@@ -2492,6 +2571,30 @@ do
         for i, s in ipairs(SLOTS) do Paint(_G["Character" .. s .. "Slot"], -2, i - 1) end
     end
     WT.PaintGlows = PaintAll
+
+    -- the loot window (0.34): its items are rolled when it opens (tooltips.lua),
+    -- so a unique or set piece glows there before it is picked up
+    function WT.PaintLootGlows()
+        for i = 1, 40 do
+            local b = _G["LootButton" .. i]
+            if not b then break end
+            local kind
+            if b:IsShown() and b.slot and GetLootSlotLink and WT.LootItemKind then
+                local link = GetLootSlotLink(b.slot)
+                kind = WT.LootItemKind(link and tonumber(link:match("item:(%d+)")))
+            end
+            if kind then
+                local g = Glow(b)
+                local c = COLORS[kind]
+                g:SetVertexColor(c[1], c[2], c[3])
+                g:Show()
+            elseif b.wtGlow then
+                b.wtGlow:Hide()
+            end
+        end
+    end
+    if LootFrame_UpdateButton then hooksecurefunc("LootFrame_UpdateButton", function() WT.PaintLootGlows() end) end
+    if LootFrame_Update then hooksecurefunc("LootFrame_Update", function() WT.PaintLootGlows() end) end
 
     if ContainerFrame_Update then hooksecurefunc("ContainerFrame_Update", function(frame) PaintContainer(frame) end) end
     if PaperDollItemSlotButton_Update then
@@ -6455,7 +6558,7 @@ end
 -- ---------------------------------------------------------------------------
 
 do
-    WT.CLIENT_VERSION = "0.33"
+    WT.CLIENT_VERSION = "0.34"
     local warned = false
     StaticPopupDialogs["WORLDTIERS_OUTDATED"] = {
         text = "|cffff9933Your IsDead WoW client files are out of date.|r\n\n%s\n\nClose the game and start it with |cffffffffIsDead Launcher|r: it updates everything by itself.",
@@ -6505,7 +6608,7 @@ events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
         if prefix == PREFIX and sender == UnitName("player") then
             if not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
-                and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) then OnMessage(msg) end
+                and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnLootPreviewMessage(msg) then OnMessage(msg) end
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LEVEL_UP" then
         Send("H")
