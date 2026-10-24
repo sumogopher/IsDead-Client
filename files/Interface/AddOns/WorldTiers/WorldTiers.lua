@@ -2667,7 +2667,27 @@ do
         if self.left <= 0 then self:Hide() return end
         self:SetAlpha(math.min(1, self.left))   -- fades out over the last second
     end)
-    local function Toast(kind, name, item)
+    local function Toast(kind, name, item, entry)
+        -- 0.35: the big announcement in the middle of the screen (splash.lua)
+        if WT.Splash then
+            local id = tonumber(entry)
+            local icon = id and GetItemIcon and GetItemIcon(id)
+            local itemText = item or ""
+            if id and GetItemInfo then
+                local _, _, quality = GetItemInfo(id)
+                local qc = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+                if qc and qc.hex then itemText = qc.hex .. itemText .. "|r" end
+            end
+            WT.Splash({
+                title = kind == "U" and "Unique Found" or kind == "S" and "Set Piece Found" or "Unique Set Piece",
+                sub = name or "",
+                detail = (kind == "U" and "on " or "") .. itemText,
+                color = COLORS[kind] or COLORS.S,
+                icon = icon or (kind == "U" and "Interface\\Icons\\INV_Misc_Gem_Variety_02" or "Interface\\Icons\\INV_Chest_Plate02"),
+                sound = "Sound\\Spells\\AchievmentSound1.wav",
+            })
+            return
+        end
         local c = COLORS[kind] or COLORS.S
         tIcon:SetTexture(kind == "U" and "Interface\\Icons\\INV_Misc_Gem_Variety_02" or "Interface\\Icons\\INV_Chest_Plate02")
         tHead:SetText(kind == "U" and "Unique found!" or "Set piece found!")
@@ -2696,9 +2716,159 @@ do
             PaintAll()
         elseif cmd == "UF" then
             local f = Split(rest, "|")
-            Toast(f[1], f[2], f[3])
+            Toast(f[1], f[2], f[3], f[4])
         end
         return true
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Announcements in the middle of the screen (0.35): a Paragon level gained,
+-- and a unique or set piece looted. A wide banner, big lettering, a sound;
+-- it grows in, holds, and fades. Several at once wait their turn.
+--   PL|level|gained|free       a Paragon level
+--   (WT.Splash is also called for UF| by glow.lua)
+-- ---------------------------------------------------------------------------
+
+do
+    local f = CreateFrame("Frame", "WorldTiersSplash", UIParent)
+    Size(f, 640, 132)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 170)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:EnableMouse(false)
+    f:Hide()
+
+    -- the banner: dark in the middle, fading out to either side, a coloured line above and below
+    local function Half(point, l2r)
+        local t = f:CreateTexture(nil, "BACKGROUND")
+        t:SetTexture(1, 1, 1, 1)
+        t:SetPoint("TOP", 0, -14)
+        t:SetPoint("BOTTOM", 0, 14)
+        t:SetWidth(320)
+        t:SetPoint(point, f, "CENTER", 0, 0)
+        if t.SetGradientAlpha then
+            if l2r then t:SetGradientAlpha("HORIZONTAL", 0, 0, 0, 0, 0, 0, 0, 0.78)
+            else t:SetGradientAlpha("HORIZONTAL", 0, 0, 0, 0.78, 0, 0, 0, 0) end
+        else
+            t:SetVertexColor(0, 0, 0, 0.6)
+        end
+        return t
+    end
+    Half("RIGHT", true)
+    Half("LEFT", false)
+    local lines = {}
+    for i, y in ipairs({ -12, 12 }) do
+        for side = 1, 2 do
+            local t = f:CreateTexture(nil, "ARTWORK")
+            t:SetTexture(1, 1, 1, 1)
+            t:SetHeight(2)
+            t:SetWidth(300)
+            t:SetPoint(side == 1 and "RIGHT" or "LEFT", f, i == 1 and (side == 1 and "TOP" or "TOP") or "BOTTOM", 0, y)
+            lines[#lines + 1] = { tex = t, fadeToRight = side == 2 }
+        end
+    end
+
+    local icon = f:CreateTexture(nil, "ARTWORK")
+    Size(icon, 52, 52)
+    icon:SetPoint("CENTER", f, "TOP", 0, -6)
+    local iconRing = f:CreateTexture(nil, "OVERLAY")
+    iconRing:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    iconRing:SetBlendMode("ADD")
+    Size(iconRing, 100, 100)
+    iconRing:SetPoint("CENTER", icon, "CENTER")
+
+    local head = f:CreateFontString(nil, "OVERLAY")
+    head:SetFont("Fonts\\MORPHEUS.TTF", 34, "OUTLINE")
+    head:SetPoint("TOP", 0, -36)
+    local sub = f:CreateFontString(nil, "OVERLAY")
+    sub:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
+    sub:SetPoint("TOP", head, "BOTTOM", 0, -6)
+    sub:SetWidth(600)
+    local detail = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    detail:SetPoint("TOP", sub, "BOTTOM", 0, -4)
+    detail:SetWidth(600)
+
+    local queue, t, phase = {}, 0, nil
+    local IN, HOLD, OUT = 0.35, 3.6, 1.0
+
+    local function ShowNext()
+        local a = table.remove(queue, 1)
+        if not a then f:Hide() phase = nil return end
+        local c = a.color
+        head:SetText(a.title)
+        head:SetTextColor(c[1], c[2], c[3])
+        sub:SetText(a.sub or "")
+        detail:SetText(a.detail or "")
+        for _, l in ipairs(lines) do
+            if l.tex.SetGradientAlpha then
+                if l.fadeToRight then l.tex:SetGradientAlpha("HORIZONTAL", c[1], c[2], c[3], 1, c[1], c[2], c[3], 0)
+                else l.tex:SetGradientAlpha("HORIZONTAL", c[1], c[2], c[3], 0, c[1], c[2], c[3], 1) end
+            else
+                l.tex:SetVertexColor(c[1], c[2], c[3], 0.8)
+            end
+        end
+        if a.icon then
+            icon:SetTexture(a.icon)
+            icon:Show()
+            iconRing:SetVertexColor(c[1], c[2], c[3])
+            iconRing:Show()
+        else
+            icon:Hide()
+            iconRing:Hide()
+        end
+        if a.sound and PlaySoundFile then PlaySoundFile(a.sound) end
+        t, phase = 0, "in"
+        f:SetAlpha(0)
+        f:SetScale(1.25)
+        f:Show()
+    end
+
+    f:SetScript("OnUpdate", function(self, elapsed)
+        t = t + elapsed
+        if phase == "in" then
+            local k = math.min(1, t / IN)
+            self:SetAlpha(k)
+            self:SetScale(1.25 - 0.25 * k)   -- grows in, settling to its size
+            if k >= 1 then phase, t = "hold", 0 end
+        elseif phase == "hold" then
+            if t >= HOLD then phase, t = "out", 0 end
+        elseif phase == "out" then
+            local k = math.min(1, t / OUT)
+            self:SetAlpha(1 - k)
+            if k >= 1 then ShowNext() end
+        end
+    end)
+
+    -- { title, sub, detail, color = {r,g,b}, icon, sound }
+    function WT.Splash(a)
+        if not a or not a.title then return end
+        a.color = a.color or { 1, 0.82, 0 }
+        queue[#queue + 1] = a
+        if not phase then ShowNext() end
+    end
+
+    function WT.OnSplashMessage(msg)
+        if msg:sub(1, 3) ~= "PL|" then return false end
+        local p = Split(msg:sub(4), "|")
+        local level, gained, free = tonumber(p[1]) or 0, tonumber(p[2]) or 1, tonumber(p[3]) or 0
+        WT.Splash({
+            title = "Paragon Level " .. level,
+            sub = gained > 1 and string.format("+%d Paragon points", gained) or "+1 Paragon point",
+            detail = string.format("%d to spend on your Paragon Board (/paragon)", free),
+            color = { 0.4, 0.8, 1 },
+            icon = "Interface\\Icons\\Spell_Holy_EmpowerChampion",
+            sound = "Sound\\Interface\\LevelUp.wav",
+        })
+        return true
+    end
+
+    SLASH_WORLDTIERSSPLASH1 = "/wtsplash"
+    SlashCmdList["WORLDTIERSSPLASH"] = function()   -- a look at all three
+        WT.OnSplashMessage("PL|151|1|3")
+        WT.Splash({ title = "Unique Found", sub = "Colossus Smash", detail = "on Helm of the Example", color = { 1, 0.5, 0 },
+                    icon = "Interface\\Icons\\INV_Misc_Gem_Variety_02", sound = "Sound\\Spells\\AchievmentSound1.wav" })
+        WT.Splash({ title = "Set Piece Found", sub = "Battlegear of the Colossus", detail = "Helm of the Example", color = { 0.12, 1, 0.59 },
+                    icon = "Interface\\Icons\\INV_Chest_Plate02", sound = "Sound\\Spells\\AchievmentSound1.wav" })
     end
 end
 
@@ -6558,7 +6728,7 @@ end
 -- ---------------------------------------------------------------------------
 
 do
-    WT.CLIENT_VERSION = "0.34"
+    WT.CLIENT_VERSION = "0.35"
     local warned = false
     StaticPopupDialogs["WORLDTIERS_OUTDATED"] = {
         text = "|cffff9933Your IsDead WoW client files are out of date.|r\n\n%s\n\nClose the game and start it with |cffffffffIsDead Launcher|r: it updates everything by itself.",
@@ -6608,7 +6778,7 @@ events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
         if prefix == PREFIX and sender == UnitName("player") then
             if not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
-                and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnLootPreviewMessage(msg) then OnMessage(msg) end
+                and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) then OnMessage(msg) end
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LEVEL_UP" then
         Send("H")
