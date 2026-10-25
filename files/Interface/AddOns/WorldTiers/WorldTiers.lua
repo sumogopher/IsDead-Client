@@ -2344,6 +2344,10 @@ do
         local cmd, rest = msg:match("^(Q%u)|(.*)$")
         if not cmd then return false end
         local f = Split(rest, "|")
+        if cmd == "QG" then
+            if WT.OnPerksData then WT.OnPerksData(f) end
+            return true
+        end
         if cmd == "QH" then
             pending = { list = {}, pouch = {}, bags = {} }
             skills.bank = tonumber(f[1]) or 0
@@ -2942,6 +2946,79 @@ do
         board:SetPoint("CENTER")
         board:SetFrameStrata("HIGH")
         board:SetMovable(true)
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- The Perks tab (0.37.6): small things that take annoyances out of playing,
+-- always on. The server sends its numbers (QG).
+-- ---------------------------------------------------------------------------
+
+do
+    local perks = { recovery = 15, ironWill = 95, snare = 30, flags = 127 }
+    local LIST = {
+        { bit = 1, name = "Rapid Recovery", icon = "Spell_Nature_Rejuvenation",
+          text = function() return string.format("After 3 seconds out of combat you (and your pet) regain |cff1eff00%d%% of your health and mana every second|r until full. Not in battlegrounds.", perks.recovery) end },
+        { bit = 2, name = "No Daze", icon = "Ability_Mount_RidingHorse",
+          text = function() return "Enemies can no longer |cffff4040Daze|r you or your pet: being struck from behind while moving or mounted never slows you." end },
+        { bit = 4, name = "No Resurrection Sickness", icon = "Spell_Holy_Resurrection",
+          text = function() return "You never get |cffff4040Resurrection Sickness|r: coming back at a Spirit Healer doesn't weaken you." end },
+        { bit = 8, name = "Contented Pets", icon = "Ability_Hunter_BeastTraining",
+          text = function() return "Your Hunter pet is always happy: no feeding, and it never deals less damage for being unhappy." end },
+        { bit = 16, name = "Endless Ammo", icon = "INV_Ammo_Arrow_02",
+          text = function() return "The arrows or bullets you have equipped never run out: your stack refills by itself (keep a little bag space)." end },
+        { bit = 32, name = "Iron Will", icon = "Spell_Magic_MageArmor",
+          text = function() return string.format("Crowd control on you and your pets (stuns, fears, roots, silences, polymorphs...) lasts |cff1eff00%d%% less|r.", perks.ironWill) end },
+        { bit = 64, name = "Snare Breaker", icon = "Ability_Rogue_Sprint",
+          text = function() return string.format("Slows on you and your pets are never stronger than |cff1eff00%d%%|r.", perks.snare) end },
+    }
+
+    function WT.OnPerksData(f)
+        perks.recovery, perks.ironWill, perks.snare = tonumber(f[1]) or 15, tonumber(f[2]) or 95, tonumber(f[3]) or 30
+        perks.flags = tonumber(f[4]) or 127
+        if WT.RefreshPerksPage then WT.RefreshPerksPage() end
+    end
+
+    function WT.BuildPerksPage(page, H)
+        local s = H.Section(16, -60, 788, 516, "Perks", page)
+        local intro = s:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        intro:SetPoint("TOPLEFT", 14, -38)
+        intro:SetWidth(760)
+        intro:SetJustifyH("LEFT")
+        intro:SetText("Permanent perks for everyone, always on. They're here to take some of the annoyances out of playing: "
+            .. "no waiting to drink after every fight, no being dazed off your mount, no feeding your pet or buying arrows, "
+            .. "and no being stunlocked from start to finish.")
+        local rows = {}
+        for i, p in ipairs(LIST) do
+            local r = CreateFrame("Frame", nil, s)
+            Size(r, 760, 56)
+            r:SetPoint("TOPLEFT", 14, -84 - (i - 1) * 60)
+            r.icon = r:CreateTexture(nil, "ARTWORK")
+            Size(r.icon, 40, 40)
+            r.icon:SetPoint("LEFT", 0, 0)
+            r.icon:SetTexture("Interface\\Icons\\" .. p.icon)
+            r.name = r:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            r.name:SetPoint("TOPLEFT", r.icon, "TOPRIGHT", 12, 2)
+            r.name:SetText(p.name)
+            r.state = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            r.state:SetPoint("LEFT", r.name, "RIGHT", 10, 0)
+            r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            r.text:SetPoint("TOPLEFT", r.name, "BOTTOMLEFT", 0, -4)
+            r.text:SetWidth(690)
+            r.text:SetJustifyH("LEFT")
+            r.perk = p
+            rows[i] = r
+        end
+        function WT.RefreshPerksPage()
+            if not page:IsShown() then return end
+            for _, r in ipairs(rows) do
+                local on = math.floor(perks.flags / r.perk.bit) % 2 == 1
+                r.text:SetText(r.perk.text())
+                r.state:SetText(on and "|cff1eff00ALWAYS ACTIVE|r" or "|cff888888switched off on this realm|r")
+                r.icon:SetDesaturated(not on)
+            end
+        end
+        page:SetScript("OnShow", function() Send("QG") WT.RefreshPerksPage() end)
     end
 end
 -- ---------------------------------------------------------------------------
@@ -7199,6 +7276,11 @@ do
         skillsPage:Hide()
         hub.pages.skills = skillsPage
         if WT.BuildSkillsPage then WT.BuildSkillsPage(skillsPage, helpers) end
+        local perksPage = CreateFrame("Frame", nil, win)
+        perksPage:SetAllPoints()
+        perksPage:Hide()
+        hub.pages.perks = perksPage
+        if WT.BuildPerksPage then WT.BuildPerksPage(perksPage, helpers) end
         win:HookScript("OnHide", function() if WT.UnembedBoard then WT.UnembedBoard() end end)
 
         -- ---------------- the tabs ----------------
@@ -7215,8 +7297,9 @@ do
             end
         end
         WT.hubShowPage = ShowPage
-        local order = { { "guide", "Guide", 60 }, { "overview", "Overview", 80 }, { "vault", "Vault", 58 },
-            { "events", "Events", 64 }, { "paragon", "Paragon", 72 }, { "keystones", "Keystones", 82 }, { "skills", "Skills", 60 } }
+        local order = { { "guide", "Guide", 56 }, { "overview", "Overview", 76 }, { "vault", "Vault", 54 },
+            { "events", "Events", 60 }, { "paragon", "Paragon", 68 }, { "keystones", "Keystones", 78 }, { "skills", "Skills", 56 },
+            { "perks", "Perks", 54 } }
         local right = -44
         for i = #order, 1, -1 do
             local key, label, w = order[i][1], order[i][2], order[i][3]
