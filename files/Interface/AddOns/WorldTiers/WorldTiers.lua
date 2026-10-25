@@ -2318,13 +2318,15 @@ do
         return icon or "Interface\\Icons\\INV_Misc_QuestionMark"
     end
     -- where a skill comes from (0.37.3)
-    local ORIGIN = {
-        L = "Learned as you level",
-        LK = "Learned as you level, and used by your keystones",
-        K = "From a keystone",
-        P = "From your weapon poisons",
-    }
-    local function OriginText(s) return ORIGIN[s.origin or "L"] or ORIGIN.L end
+    -- s.from: the keystones (and Ascendancy) that strike with it, by name (0.37.4)
+    local function OriginText(s)
+        local from = (s.from or ""):gsub(";", ", ")
+        local o = s.origin or "L"
+        if o == "P" then return "From your weapon poisons" .. (from ~= "" and (", and " .. from) or "") end
+        if o == "K" then return from ~= "" and ("From " .. from) or "From a keystone" end
+        if o == "LK" then return "Learned as you level, and from " .. (from ~= "" and from or "a keystone") end
+        return "Learned as you level"
+    end
     WT.SkillOriginText = OriginText
     local function MoreFromLevels(eff)
         local slow = 40
@@ -2351,7 +2353,7 @@ do
         elseif cmd == "QK" then
             local p = Split(rest, "^")
             local s = { key = tonumber(p[1]) or 0, spell = tonumber(p[2]) or 0, level = tonumber(p[3]) or 0, xp = tonumber(p[4]) or 0,
-                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {}, origin = p[9] or "L" }
+                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {}, origin = p[9] or "L", from = p[10] or "" }
             local i = 0
             for one in ((p[8] or "") .. ","):gmatch("([^,]*),") do
                 i = i + 1
@@ -2691,6 +2693,8 @@ do
             if s then
                 dIcon:SetTexture(SkillIcon(s))
                 dName:SetText(SkillName(s))
+                detail.note:SetWidth(300)
+                detail.note:SetJustifyH("RIGHT")
                 detail.note:SetText(OriginText(s))
                 local nextAt = NextLinkAt(s)
                 dLevel:SetText(string.format("Level %d%s  -  |cff1eff00%s%% more damage|r from its levels%s", s.level,
