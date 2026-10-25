@@ -6363,7 +6363,7 @@ do
     local barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     barText:SetPoint("CENTER", 0, 0)
     TipOn(bar, function() return "Unlocking the next tier",
-        "Defeat dungeon or raid bosses at your highest unlocked tier. A kill counts at the lowest tier that did enough of the damage." end)
+        "Earn points at your highest unlocked tier: dungeon boss 2, raid boss 3, a raid's last boss 8, world boss 6, Tier Key 4 + its level, Champion 1, Treasure Goblin 2. Unlocked tiers are your whole account's. A kill counts at the lowest tier that did enough of the damage." end)
 
     local tierNext = Text(tierS, "GameFontHighlightSmall", 14, -132, 362)
     tierNext:SetTextColor(0.75, 0.75, 0.75)
@@ -7038,7 +7038,7 @@ do
                 .. "so old places stay worth your time and drop gear for your level.\n"
                 .. "- Each tier above I makes creatures tougher for you, and pays you back: more experience, better gear "
                 .. "(+15 item levels per tier), more gold.\n"
-                .. "- " .. W .. "Unlocking the next tier:" .. E .. " defeat a few dungeon, raid or world bosses at your highest unlocked tier. "
+                .. "- " .. W .. "Unlocking the next tier:" .. E .. " earn points at your highest unlocked tier: bosses (a raid's last boss most), Tier Keys, Champions and Treasure Goblins all count. Unlocked tiers are shared by your whole account. "
                 .. "The Overview tab shows your progress.\n"
                 .. "- You can change tier any time out of combat, down as well as up.\n"
                 .. "- Below level 80 you can reach Tier II; past that opens at the level cap." },
@@ -7228,7 +7228,7 @@ do
         local need = math.max(1, h.need or 1)
         bar:SetMinMaxValues(0, need)
         bar:SetValue(math.min(h.progress or 0, need))
-        barText:SetText(string.format("Next tier: %d / %d bosses", h.progress or 0, need))
+        barText:SetText(string.format("Next tier: %d / %d points", h.progress or 0, need))
         if h.nextName and h.nextName ~= "" then
             tierNext:SetText(string.format("%s: %s health, %s damage, +%d item levels", h.nextName, h.nextHealth, h.nextDamage, h.nextIlvl or 0))
         else
