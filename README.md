@@ -10,7 +10,7 @@ Cache folder when a patch changes, and starts the game.
 | Path in `files/` (= the WoW folder) | What |
 |---|---|
 | `Data/enUS/patch-enUS-W.MPQ` | IsDead / World Tiers patch (spells, items, logo). Put into the player's own language folder automatically (enGB etc.) |
-| `Data/Patch-A.MPQ` | All Races All Classes (mod-arac) client patch |
+| `Data/patch-Z.MPQ` | All Races All Classes (mod-arac) client patch (renamed from Patch-A so HD packs can use that name) |
 | `Interface/AddOns/WorldTiers/` | World Tiers addon |
 | `Interface/AddOns/Atlas/` | Atlas 1.16.1 (dungeon and raid maps) |
 | `IsDeadLauncher.ps1` | the launcher; updates itself |
@@ -46,7 +46,7 @@ players with older files get an in-game "out of date" message.
 
 - GitHub caps single files at 100 MB; everything here is far below that.
 - `.gitattributes` turns off line-ending conversion, so file hashes stay exact.
-- If your server runs a different mod-arac build, replace `files/Data/Patch-A.MPQ`
-  with the Patch-A.MPQ from your mod-arac folder.
+- If your server runs a different mod-arac build, replace `files/Data/patch-Z.MPQ`
+  with the Patch-A.MPQ from your mod-arac folder (renamed to patch-Z.MPQ).
 - Licenses: mod-arac is AGPL-3.0 and Atlas GPL-2.0 (see `licenses/`); both
   allow redistributing them this way.
