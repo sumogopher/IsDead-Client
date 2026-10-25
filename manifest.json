@@ -1,6 +1,6 @@
 {
   "version": "0.37",
-  "cacheVersion": "f41788e2b52b123f",
+  "cacheVersion": "e6bc8d1beb6101c2",
   "realmlist": "26.148.25.63",
   "news": "",
   "managedDirs": [
@@ -13,11 +13,6 @@
       "size": 6407692,
       "sha256": "19369130e5f57fbb548cac24dbec8cfea2983764d034ce016e995df7585cb4f7",
       "localized": true
-    },
-    {
-      "path": "Data/Patch-A.MPQ",
-      "size": 26685,
-      "sha256": "b0d920ea5a8a7c2d592328d8bc64c5d4aa43c06efe0a92318312165d3608d305"
     },
     {
       "path": "Data/patch-M.MPQ",
@@ -38,6 +33,11 @@
       "path": "Data/patch-P.MPQ",
       "size": 14524744,
       "sha256": "47c40b526ab6259e5b36790d56510edb7a40305c4efbfc9116cee9e13feb5ca5"
+    },
+    {
+      "path": "Data/patch-Z.MPQ",
+      "size": 26685,
+      "sha256": "b0d920ea5a8a7c2d592328d8bc64c5d4aa43c06efe0a92318312165d3608d305"
     },
     {
       "path": "Interface/AddOns/Atlas/Atlas.lua",
@@ -791,8 +791,8 @@
     },
     {
       "path": "IsDeadLauncher.ps1",
-      "size": 10873,
-      "sha256": "2d415636e317e2bb80ed20ae1c5e19c35893a69c13123542d4f76e325cdc0b7c"
+      "size": 11269,
+      "sha256": "a9cb1723fda8a6b7128ed49d428df46c229e5abdef75c751324a97d46ffe0d12"
     }
   ]
 }

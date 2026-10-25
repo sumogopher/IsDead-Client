@@ -243,7 +243,14 @@ if ($todo.Count -eq 0 -and $stale.Count -eq 0 -and -not $clearCache) {
 
     foreach ($rel in $stale) {
         $full = Join-Path $Game $rel
-        if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Force; Say "  removed $rel" }
+        if (-not (Test-Path -LiteralPath $full)) { continue }
+        # a patch file the server no longer ships: only if it is still the one this launcher put there (a file of
+        # the same name from somewhere else, an HD pack's Patch-A say, stays)
+        if ($known.ContainsKey($rel) -and $known[$rel] -and (Get-Sha256 $full) -ne $known[$rel]) {
+            Say "  kept $rel (not ours any more)"
+            continue
+        }
+        Remove-Item -LiteralPath $full -Force; Say "  removed $rel"
     }
 
     if ($clearCache) {
