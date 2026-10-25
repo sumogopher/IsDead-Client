@@ -2325,6 +2325,7 @@ do
         if o == "P" then return "From your weapon poisons" .. (from ~= "" and (", and " .. from) or "") end
         if o == "K" then return from ~= "" and ("From " .. from) or "From a keystone" end
         if o == "LK" then return "Learned as you level, and from " .. (from ~= "" and from or "a keystone") end
+        if o == "?" then return "|cffff6060(the server needs the 0.37.4 update)|r" end
         return "Learned as you level"
     end
     WT.SkillOriginText = OriginText
@@ -2353,7 +2354,7 @@ do
         elseif cmd == "QK" then
             local p = Split(rest, "^")
             local s = { key = tonumber(p[1]) or 0, spell = tonumber(p[2]) or 0, level = tonumber(p[3]) or 0, xp = tonumber(p[4]) or 0,
-                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {}, origin = p[9] or "L", from = p[10] or "" }
+                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {}, origin = p[9] or "?", from = p[10] or "" }
             local i = 0
             for one in ((p[8] or "") .. ","):gmatch("([^,]*),") do
                 i = i + 1
