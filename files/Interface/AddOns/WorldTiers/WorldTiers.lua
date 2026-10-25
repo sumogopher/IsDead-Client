@@ -2302,6 +2302,7 @@ do
 
     local function SkillName(s)
         if s.key == 883 then return "Pet" end
+        if s.key == 20271 then return "Judgement" end   -- every Judgement is one skill
         local name = GetSpellInfo(s.spell)
         return name or ("Skill " .. s.key)
     end
@@ -7510,7 +7511,7 @@ end
 -- ---------------------------------------------------------------------------
 
 do
-    WT.CLIENT_VERSION = "0.36"
+    WT.CLIENT_VERSION = "0.37"
     local warned = false
     StaticPopupDialogs["WORLDTIERS_OUTDATED"] = {
         text = "|cffff9933Your IsDead WoW client files are out of date.|r\n\n%s\n\nClose the game and start it with |cffffffffIsDead Launcher|r: it updates everything by itself.",
