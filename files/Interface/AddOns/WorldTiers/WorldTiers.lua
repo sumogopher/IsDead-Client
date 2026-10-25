@@ -2317,6 +2317,15 @@ do
         local _, _, icon = GetSpellInfo(s.spell)
         return icon or "Interface\\Icons\\INV_Misc_QuestionMark"
     end
+    -- where a skill comes from (0.37.3)
+    local ORIGIN = {
+        L = "Learned as you level",
+        LK = "Learned as you level, and used by your keystones",
+        K = "From a keystone",
+        P = "From your weapon poisons",
+    }
+    local function OriginText(s) return ORIGIN[s.origin or "L"] or ORIGIN.L end
+    WT.SkillOriginText = OriginText
     local function MoreFromLevels(eff)
         local slow = 40
         local l = math.min(eff, slow) + math.max(0, eff - slow) * 0.5
@@ -2342,7 +2351,7 @@ do
         elseif cmd == "QK" then
             local p = Split(rest, "^")
             local s = { key = tonumber(p[1]) or 0, spell = tonumber(p[2]) or 0, level = tonumber(p[3]) or 0, xp = tonumber(p[4]) or 0,
-                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {} }
+                need = tonumber(p[5]) or 1, open = tonumber(p[6]) or 0, eff = tonumber(p[7]) or 0, links = {}, origin = p[9] or "L" }
             local i = 0
             for one in ((p[8] or "") .. ","):gmatch("([^,]*),") do
                 i = i + 1
@@ -2426,8 +2435,8 @@ do
         local function Row(i)
             if rows[i] then return rows[i] end
             local r = CreateFrame("Button", nil, body)
-            Size(r, 258, 26)
-            r:SetPoint("TOPLEFT", 0, -(i - 1) * 27)
+            Size(r, 258, 32)
+            r:SetPoint("TOPLEFT", 0, -(i - 1) * 33)
             r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
             r.sel = r:CreateTexture(nil, "BACKGROUND")
             r.sel:SetAllPoints()
@@ -2436,9 +2445,14 @@ do
             Size(r.icon, 22, 22)
             r.icon:SetPoint("LEFT", 2, 0)
             r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            r.name:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
+            r.name:SetPoint("TOPLEFT", r.icon, "TOPRIGHT", 6, 2)
             r.name:SetWidth(150)
             r.name:SetJustifyH("LEFT")
+            r.origin = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            r.origin:SetPoint("TOPLEFT", r.name, "BOTTOMLEFT", 0, -2)
+            r.origin:SetWidth(170)
+            r.origin:SetHeight(11)
+            r.origin:SetJustifyH("LEFT")
             r.links = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             r.links:SetPoint("RIGHT", -34, 0)
             r.level = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2661,6 +2675,7 @@ do
                 r.key = s.key
                 r.icon:SetTexture(SkillIcon(s))
                 r.name:SetText(SkillName(s))
+                r.origin:SetText(OriginText(s))
                 local n = 0
                 for _ in pairs(s.links) do n = n + 1 end
                 r.links:SetText(s.open > 0 and string.format("|cff66ccff%d/%d|r", n, s.open) or "")
@@ -2669,13 +2684,14 @@ do
                 r:Show()
             end
             for i = #skills.list + 1, #rows do rows[i]:Hide() end
-            body:SetHeight(math.max(400, #skills.list * 27))
+            body:SetHeight(math.max(400, #skills.list * 33))
             listS.header:SetText(string.format("Skills (%d)", #skills.list))
             -- the chosen one
             local s = Selected()
             if s then
                 dIcon:SetTexture(SkillIcon(s))
                 dName:SetText(SkillName(s))
+                detail.note:SetText(OriginText(s))
                 local nextAt = NextLinkAt(s)
                 dLevel:SetText(string.format("Level %d%s  -  |cff1eff00%s%% more damage|r from its levels%s", s.level,
                     s.eff ~= s.level and string.format(" (|cff66ccff%d|r with supports)", s.eff) or "", Num(MoreFromLevels(s.eff)),
@@ -2709,6 +2725,7 @@ do
                 if skills.bank > 0 then bankB:Enable() else bankB:Disable() end
             else
                 dName:SetText("No skills yet")
+                detail.note:SetText("")
                 dLevel:SetText("Use your abilities: every one that deals damage or heals levels as you kill.")
                 bar:Hide()
             end
@@ -7466,7 +7483,8 @@ end
 -- The Dungeon Finder: show dungeons you've outlevelled when the server lets
 -- you queue for them (World Tiers sync them up to you). The stock list hides
 -- any dungeon past its maximum level before it asks the server. Raids are
--- listed under the dungeons, and queue the same way.
+-- listed under the dungeons, once each, in the raid difficulty set on your
+-- portrait (right-click it: Raid Difficulty), and queue the same way.
 -- ---------------------------------------------------------------------------
 
 do
@@ -7489,8 +7507,25 @@ do
         if WT.raidsInFinder == false or type(GetLFRChoiceOrder) ~= "function" then return list end
         local have = {}
         for _, id in ipairs(list) do have[id] = true end
+        -- one line a raid (0.37.3): the entry for the raid difficulty chosen on your portrait (10 / 25, heroic)
+        local want = (GetRaidDifficulty and GetRaidDifficulty() or 1) - 1
+        local R = LFG_RETURN_VALUES
+        local best, order = {}, {}
         for _, id in ipairs(GetLFRChoiceOrder() or {}) do
-            if not have[id] then list[#list + 1] = id have[id] = true end
+            if not have[id] then
+                local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
+                local name = info and R and info[R.name] or tostring(id)
+                local diff = info and R and tonumber(info[R.difficulty]) or 0
+                -- the exact difficulty, else the same size (10 or 25), else the lowest
+                local score = (diff == want) and 0 or ((diff % 2) == (want % 2) and 1 or 2) + diff * 0.01
+                if not best[name] then order[#order + 1] = name end
+                if not best[name] or score < best[name].score then best[name] = { id = id, score = score } end
+            end
+        end
+        for _, name in ipairs(order) do
+            local id = best[name].id
+            list[#list + 1] = id
+            have[id] = true
         end
         return list
     end
@@ -7509,6 +7544,7 @@ do
     local ev = CreateFrame("Frame")
     ev:RegisterEvent("PLAYER_LOGIN")
     ev:RegisterEvent("LFG_LOCK_INFO_RECEIVED")
+    pcall(ev.RegisterEvent, ev, "PLAYER_DIFFICULTY_CHANGED")   -- a new raid difficulty: its raids in the list
     ev:SetScript("OnEvent", function()
         Install()
         if LFDQueueFrame and LFDQueueFrame:IsShown() and LFDQueueFrame_Update then LFDQueueFrame_Update() end
