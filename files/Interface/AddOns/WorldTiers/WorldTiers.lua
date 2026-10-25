@@ -2152,6 +2152,13 @@ do
         return asc.list, asc.chosen, asc.need, asc.level, asc.mastery
     end
     function WT.AskAscendancies() Send("J") end
+    -- once at login, so every window that shows the Ascendancy has it from the start
+    local login = CreateFrame("Frame")
+    login:RegisterEvent("PLAYER_ENTERING_WORLD")
+    login:SetScript("OnEvent", function(self)
+        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        Send("J")
+    end)
     SLASH_WORLDTIERSASCEND1 = "/ascend"
     SlashCmdList["WORLDTIERSASCEND"] = function() WT.OpenAscendancy() end
 end
@@ -6709,7 +6716,7 @@ do
         local function Refresh()
             if not WT.AscInfo then return end
             local a, need, level, m = Mine()
-            need, level = need or 80, level or UnitLevel("player")
+            need, level = need or 80, (level and level > 0) and level or UnitLevel("player")   -- 0: not heard from the server yet
             if level < need then
                 icon:SetTexture("Interface\\Icons\\INV_Misc_Key_03")
                 icon:SetDesaturated(true)
@@ -7354,6 +7361,8 @@ do
         local f = Split(msg:sub(4), "|")
         if cmd == "WW" then
             wantOpen = true
+            -- opened by the server (the menu spell, a Keeper): the Ascendancy too, or it shows as not yet open
+            if WT.AskAscendancies then WT.AskAscendancies() end
         elseif cmd == "WH" then
             hub.ports, hub.options = {}, {}
             hub.h = {
