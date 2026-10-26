@@ -781,8 +781,8 @@
     },
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.lua",
-      "size": 384569,
-      "sha256": "74e2cbfe3c3d2be7cdd9aafddf71b3034815a3e5c5026b47c6d00c1849ae5a8c"
+      "size": 385072,
+      "sha256": "086c7478c896fbe721b53b71ce3c71b74a073a61e7ee4368d5da89debf3ef2f9"
     },
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.toc",

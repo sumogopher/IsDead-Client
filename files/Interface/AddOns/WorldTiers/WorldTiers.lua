@@ -7578,8 +7578,12 @@ end
 do
     local stock
     local function Filter(dungeonID)
-        if stock and stock(dungeonID) then return true end
         local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(dungeonID)
+        if not info then return false end   -- nothing known about it: the stock filter would error on it (0.37.17)
+        if stock then
+            local ok, show = pcall(stock, dungeonID)
+            if ok and show then return true end
+        end
         local R = LFG_RETURN_VALUES
         if not info or not R then return false end
         local level = UnitLevel("player")
@@ -7590,8 +7594,13 @@ do
     -- Raids in the list too, after the dungeons (the server queues them like
     -- dungeons: Raids.InFinder). The stock list only ever holds dungeons.
     local stockOrder
+    local AddRaids
     local function WithRaids(list)
         list = stockOrder(list)
+        pcall(AddRaids, list)   -- whatever happens adding raids, the dungeons still list (0.37.17)
+        return list
+    end
+    AddRaids = function(list)
         if WT.raidsInFinder == false or type(GetLFRChoiceOrder) ~= "function" then return list end
         local have = {}
         for _, id in ipairs(list) do have[id] = true end
@@ -7600,10 +7609,11 @@ do
         local R = LFG_RETURN_VALUES
         local best, order = {}, {}
         for _, id in ipairs(GetLFRChoiceOrder() or {}) do
-            if not have[id] then
-                local info = LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
-                local name = info and R and info[R.name] or tostring(id)
-                local diff = info and R and tonumber(info[R.difficulty]) or 0
+            -- only raids the Dungeon Finder knows (0.37.17): an id it has no details for broke the whole list
+            local info = type(id) == "number" and id > 0 and LFGGetDungeonInfoByID and LFGGetDungeonInfoByID(id)
+            if info and not have[id] then
+                local name = R and info[R.name] or tostring(id)
+                local diff = R and tonumber(info[R.difficulty]) or 0
                 -- the exact difficulty, else the same size (10 or 25), else the lowest
                 local score = (diff == want) and 0 or ((diff % 2) == (want % 2) and 1 or 2) + diff * 0.01
                 if not best[name] then order[#order + 1] = name end
