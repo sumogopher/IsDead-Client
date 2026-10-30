@@ -7650,6 +7650,29 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Quieter errors (0.38.1): with a 1.0 sec global cooldown, pressing a key a
+-- moment early is normal, so "Ability is not ready yet" and its kin no longer
+-- fill the middle of the screen (or play the error sound). Every other error
+-- shows as before.
+-- ---------------------------------------------------------------------------
+
+do
+    local hide = {}
+    for _, key in ipairs({ "ERR_ABILITY_COOLDOWN", "ERR_SPELL_COOLDOWN", "SPELL_FAILED_NOT_READY",
+                           "SPELL_FAILED_SPELL_IN_PROGRESS" }) do
+        if type(_G[key]) == "string" then hide[_G[key]] = true end
+    end
+    local frame = UIErrorsFrame
+    local stock = frame and frame:GetScript("OnEvent")
+    if stock then
+        frame:SetScript("OnEvent", function(self, event, message, ...)
+            if event == "UI_ERROR_MESSAGE" and hide[message] then return end
+            return stock(self, event, message, ...)
+        end)
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Are this player's client files the ones the server expects? (CV|version|spell)
 -- The IsDead Launcher keeps them current; this catches anyone who started
 -- Wow.exe straight away after an update.
