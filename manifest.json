@@ -1,6 +1,6 @@
 {
   "version": "0.37",
-  "cacheVersion": "53b35d645189c1cf",
+  "cacheVersion": "9c41cf2fdbed149f",
   "realmlist": "26.148.25.63",
   "news": "",
   "managedDirs": [
@@ -10,8 +10,8 @@
   "files": [
     {
       "path": "Data/enUS/patch-enUS-W.MPQ",
-      "size": 6407406,
-      "sha256": "327bdc22cda190dc86579c3fc1f7298deb460d3ee7969c5a6e0e7b7ae2540404",
+      "size": 6406357,
+      "sha256": "d153db46e638ae9d934008a38a5276505010ecc46803005f5d912c6d82c18711",
       "localized": true
     },
     {
