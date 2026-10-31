@@ -3898,7 +3898,9 @@ local itemCache, itemPending, affixPending = {}, {}, {}
 local AFFIX_COLOR = { [0] = { 0.45, 0.65, 1 }, [1] = { 0.75, 0.45, 1 }, [2] = { 1, 0.5, 0 },
                       [3] = { 1, 0.19, 0.19 }, [4] = { 0.25, 0.88, 0.82 }, [5] = { 0.6, 0.6, 0.6 },
                       [6] = { 1, 0.5, 0 },           -- a class unique (orange)
-                      [7] = { 0.12, 1, 0.59 } }      -- a class set piece (green)
+                      [7] = { 0.12, 1, 0.59 },       -- a class set piece (green)
+                      [8] = { 0.85, 0.85, 0.85 },    -- the base's built-in line (0.43)
+                      [9] = { 1, 0.82, 0 } }         -- a Superior or Elite base (gold)
 WT.AFFIX_COLOR = AFFIX_COLOR
 
 local function Round(n) return string.format("%d", math.floor(n + 0.5)) end
@@ -3970,6 +3972,10 @@ local function Decorate(tip, info)
                 tip:AddLine(string.format("(%d) %s", need, f[2 + i] or ""), on and 0.7 or 0.5, on and 1 or 0.5, on and 0.8 or 0.5, true)
             end
             if f[5] and f[5] ~= "" then tip:AddLine(f[5], 1, 0.3, 0.3) end
+        elseif a.rarity == 8 then
+            -- the built-in line, then a rule before the affixes, as in Path of Exile
+            tip:AddLine(a.text, c[1], c[2], c[3], true)
+            tip:AddLine("--------", 0.4, 0.4, 0.4)
         else
             tip:AddLine(a.text, c[1], c[2], c[3], true)
         end
@@ -4970,13 +4976,13 @@ rerollButton:SetPoint("BOTTOMLEFT", 0, 0)
 do
 local ORBS = {
     { name = "Orb of Transmutation", icon = "INV_Misc_Orb_02", text = "An item with no affixes gets one (common or uncommon)." },
-    { name = "Orb of Alteration", icon = "INV_Elemental_Mote_Mana", text = "Each affix rerolled into another of its rarity." },
+    { name = "Orb of Alteration", icon = "INV_Elemental_Mote_Mana", text = "Each affix rerolled into another of its rarity and side (prefix or suffix), at a new tier." },
     { name = "Orb of Augmentation", icon = "INV_Elemental_Mote_Water01", text = "One more common or uncommon affix, if the item has room." },
     { name = "Chaos Orb", icon = "INV_Elemental_Mote_Nether", text = "Every affix rerolled: new affixes, and a new number of them." },
     { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", text = "One more affix of any rarity (a rare one from World Tier VI), if the item has room." },
     { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", text = "One affix, at random, taken off." },
     { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", text = "Every affix taken off." },
-    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled (70-100%)." },
+    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled within its tier (70-100%)." },
 }
 WT.ORB_NAMES = {}
 for i, o in ipairs(ORBS) do WT.ORB_NAMES[i] = o.name end
