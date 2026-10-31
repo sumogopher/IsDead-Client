@@ -5463,11 +5463,18 @@ end
 local champCache = {}   -- guid hex -> { name, text, at }
 
 local function ChampionLine(tip, info)
-    if info and info.name ~= "" then
+    if not info or info.name == "" then return end
+    if info.kind == "R" then        -- a rare monster (0.42): 3-4 modifiers
+        tip:AddLine("Rare monster: " .. info.name, 1, 1, 0)
+        tip:AddLine("It " .. info.text .. ". Tougher; drops orbs and a piece of gear.", 1, 1, 0.6, true)
+    elseif info.kind == "M" then    -- a magic monster (0.42): 1-2 modifiers
+        tip:AddLine("Magic monster: " .. info.name, 0.4, 0.6, 1)
+        tip:AddLine("It " .. info.text .. ". Tougher; more orbs.", 0.7, 0.8, 1, true)
+    else
         tip:AddLine(string.format("Champion: %s", info.name), 1, 0.5, 0)
         tip:AddLine(string.format("It %s. Three times the health; drops gear with affixes.", info.text), 1, 0.75, 0.4, true)
-        tip:Show()
     end
+    tip:Show()
 end
 
 GameTooltip:HookScript("OnTooltipSetUnit", function(tip)
@@ -5491,7 +5498,7 @@ end)
 function WT.OnChampionMessage(msg)
     if msg:sub(1, 3) ~= "CH|" then return false end
     local f = Split(msg:sub(4), "|")
-    local info = { name = f[2] or "", text = f[3] or "", at = GetTime() }
+    local info = { name = f[2] or "", text = f[3] or "", kind = f[4] or "C", at = GetTime() }
     champCache[f[1] or ""] = info
     local _, unit = GameTooltip:GetUnit()
     if unit and GameTooltip:IsShown() then
