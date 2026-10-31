@@ -3900,7 +3900,9 @@ local AFFIX_COLOR = { [0] = { 0.45, 0.65, 1 }, [1] = { 0.75, 0.45, 1 }, [2] = { 
                       [6] = { 1, 0.5, 0 },           -- a class unique (orange)
                       [7] = { 0.12, 1, 0.59 },       -- a class set piece (green)
                       [8] = { 0.85, 0.85, 0.85 },    -- the base's built-in line (0.43)
-                      [9] = { 1, 0.82, 0 } }         -- a Superior or Elite base (gold)
+                      [9] = { 1, 0.82, 0 },          -- a Superior or Elite base (gold)
+                      [10] = { 0.53, 0.6, 1 },       -- a unique item's line (0.44)
+                      [11] = { 0.75, 0.45, 0.15 } }  -- a unique item's verse, shown last
 WT.AFFIX_COLOR = AFFIX_COLOR
 
 local function Round(n) return string.format("%d", math.floor(n + 0.5)) end
@@ -3946,7 +3948,7 @@ local function Decorate(tip, info)
     if info.power ~= "" then
         tip:AddLine("Tier Power " .. info.power .. " damage", 1, 0.6, 0.2)
     end
-    local special
+    local special, verse
     for _, a in ipairs(info.affixes) do
         local c = AFFIX_COLOR[a.rarity] or AFFIX_COLOR[0]
         if a.rarity == 6 then
@@ -3972,6 +3974,11 @@ local function Decorate(tip, info)
                 tip:AddLine(string.format("(%d) %s", need, f[2 + i] or ""), on and 0.7 or 0.5, on and 1 or 0.5, on and 0.8 or 0.5, true)
             end
             if f[5] and f[5] ~= "" then tip:AddLine(f[5], 1, 0.3, 0.3) end
+        elseif a.rarity == 10 then
+            special = special or "U"   -- a unique item (0.44): its lines, the orange name and border
+            tip:AddLine(a.text, c[1], c[2], c[3], true)
+        elseif a.rarity == 11 then
+            verse = a.text
         elseif a.rarity == 8 then
             -- the built-in line, then a rule before the affixes, as in Path of Exile
             tip:AddLine(a.text, c[1], c[2], c[3], true)
@@ -3979,6 +3986,10 @@ local function Decorate(tip, info)
         else
             tip:AddLine(a.text, c[1], c[2], c[3], true)
         end
+    end
+    if verse then
+        tip:AddLine(" ")
+        tip:AddLine(verse, AFFIX_COLOR[11][1], AFFIX_COLOR[11][2], AFFIX_COLOR[11][3], true)
     end
     if special then
         -- the name in its colour, a tag on the top line, and a coloured border
@@ -4096,7 +4107,7 @@ function WT.LootItemKind(id)
     if not info then return nil end
     local u, st
     for _, a in ipairs(info.affixes) do
-        u = u or a.rarity == 6
+        u = u or a.rarity == 6 or a.rarity == 10
         st = st or a.rarity == 7
     end
     return (u and st) and "B" or u and "U" or st and "S" or nil
@@ -4982,7 +4993,7 @@ local ORBS = {
     { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", text = "One more affix of any rarity (a rare one from World Tier VI), if the item has room." },
     { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", text = "One affix, at random, taken off." },
     { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", text = "Every affix taken off." },
-    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled within its tier (70-100%)." },
+    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled within its tier (70-100%). On a unique: its numbers rerolled (the only orb that works on one)." },
 }
 WT.ORB_NAMES = {}
 for i, o in ipairs(ORBS) do WT.ORB_NAMES[i] = o.name end
@@ -5266,8 +5277,8 @@ RefreshForge = function()
                 Confirm(string.format("Reroll \"%s\" on %s for %s?\n\nIt becomes another affix of the same kind.", a.text, ItemName(it), Money(it.rerollOne)),
                     string.format("F1:%d:%d:%d", it.bag, it.slot, idx))
             end)
-            if it.rerollOne > 0 and a.rarity ~= 6 then row.button:Enable() else row.button:Disable() end
-            if a.rarity == 6 then row.cost:SetText("|cffe6cc80unique|r") end
+            if it.rerollOne > 0 and a.rarity ~= 6 and a.rarity ~= 10 then row.button:Enable() else row.button:Disable() end
+            if a.rarity == 6 or a.rarity == 10 then row.cost:SetText("|cffe6cc80unique|r") end
             row:Show()
         else
             row:Hide()
