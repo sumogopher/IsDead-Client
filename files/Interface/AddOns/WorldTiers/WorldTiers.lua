@@ -3028,7 +3028,7 @@ WT.SKILL_GEMS = {
     { 13819, 2, 20 },
     { 19746, 2, 22 },
     { 20164, 2, 22 },
-    { 10322, 2, 24 },
+    { 7328, 2, 12 },
     { 10326, 2, 24 },
     { 1038, 2, 26 },
     { 53407, 2, 28 },
@@ -3279,14 +3279,14 @@ WT.SKILL_GEMS = {
     { 2008, 64, 12 },
     { 1535, 64, 12 },
     { 370, 64, 12 },
-    { 8154, 64, 14 },
+    { 8071, 64, 4 },
     { 2645, 64, 16 },
     { 57994, 64, 16 },
     { 8143, 64, 18 },
     { 8056, 64, 20 },
     { 8033, 64, 20 },
     { 8004, 64, 20 },
-    { 6363, 64, 20 },
+    { 3599, 64, 10 },
     { 55198, 64, 20 },
     { 131, 64, 22 },
     { 8181, 64, 24 },
@@ -3298,7 +3298,7 @@ WT.SKILL_GEMS = {
     { 546, 64, 28 },
     { 556, 64, 30 },
     { 8177, 64, 30 },
-    { 6375, 64, 30 },
+    { 5394, 64, 20 },
     { 10595, 64, 30 },
     { 16188, 64, 30 },
     { 36936, 64, 30 },
@@ -3475,7 +3475,7 @@ WT.SKILL_GEMS = {
     { 770, 1024, 18 },
     { 16857, 1024, 18 },
     { 2637, 1024, 18 },
-    { 6808, 1024, 18 },
+    { 6807, 1024, 10 },
     { 768, 1024, 20 },
     { 1082, 1024, 20 },
     { 5570, 1024, 20 },
@@ -3523,6 +3523,24 @@ WT.SKILL_GEMS = {
     { 62078, 1024, 71 },
     { 52610, 1024, 75 },
     { 50464, 1024, 80 },
+    { 71, 1, 10 },
+    { 7386, 1, 10 },
+    { 355, 1, 10 },
+    { 2458, 1, 30 },
+    { 883, 4, 10 },
+    { 2641, 4, 10 },
+    { 6991, 4, 10 },
+    { 982, 4, 10 },
+    { 1515, 4, 10 },
+    { 48778, 32, 55 },
+    { 697, 256, 10 },
+    { 712, 256, 20 },
+    { 691, 256, 30 },
+    { 1122, 256, 50 },
+    { 18540, 256, 60 },
+    { 5487, 1024, 10 },
+    { 6795, 1024, 10 },
+    { 8946, 1024, 14 },
 }
 
 -- ---------------------------------------------------------------------------
@@ -4727,7 +4745,7 @@ function WT.MoneyLine()
     return line
 end
 local forgeData = { items = {}, order = {}, tier = 0, tierName = "", money = 0, runes = {}, mats = {}, codex = {}, trees = {} }
-local forgeMode = "gear"   -- or "codex"
+local forgeMode = "gear"   -- or "codex", or "craft" (0.41)
 local pendingForge = nil
 local forgeOffset, forgeSelected = 0, nil
 
@@ -4809,9 +4827,10 @@ local function ForgeTab(text, x)
 end
 local gearTab = ForgeTab("Gear", 18)
 local codexTab = ForgeTab("Power Codex", 126)
+forge.craftTab = ForgeTab("Crafting", 234)
 
 local forgeTier = forge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-forgeTier:SetPoint("LEFT", codexTab, "RIGHT", 12, 0)
+forgeTier:SetPoint("LEFT", forge.craftTab, "RIGHT", 12, 0)
 forgeTier:SetPoint("RIGHT", forge, "RIGHT", -22, 0)
 forgeTier:SetJustifyH("LEFT")
 
@@ -4947,6 +4966,95 @@ local rerollButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
 Size(rerollButton, 340, 26)
 rerollButton:SetPoint("BOTTOMLEFT", 0, 0)
 
+-- ---------------- the Crafting panel (0.41): orbs on the chosen item ----------------
+do
+local ORBS = {
+    { name = "Orb of Transmutation", icon = "INV_Misc_Orb_02", text = "An item with no affixes gets one (common or uncommon)." },
+    { name = "Orb of Alteration", icon = "INV_Elemental_Mote_Mana", text = "Each affix rerolled into another of its rarity." },
+    { name = "Orb of Augmentation", icon = "INV_Elemental_Mote_Water01", text = "One more common or uncommon affix, if the item has room." },
+    { name = "Chaos Orb", icon = "INV_Elemental_Mote_Nether", text = "Every affix rerolled: new affixes, and a new number of them." },
+    { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", text = "One more affix of any rarity (a rare one from World Tier VI), if the item has room." },
+    { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", text = "One affix, at random, taken off." },
+    { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", text = "Every affix taken off." },
+    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled (70-100%)." },
+}
+WT.ORB_NAMES = {}
+for i, o in ipairs(ORBS) do WT.ORB_NAMES[i] = o.name end
+local craft = CreateFrame("Frame", nil, forge)
+forge.craft = craft
+craft:SetPoint("TOPLEFT", list, "TOPRIGHT", 16, 0)
+Size(craft, 350, ROWS * ROW_H)
+craft:Hide()
+local cName = craft:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+cName:SetPoint("TOPLEFT", 0, -2)
+cName:SetWidth(346)
+cName:SetJustifyH("LEFT")
+local cAffixes = craft:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+cAffixes:SetPoint("TOPLEFT", cName, "BOTTOMLEFT", 0, -6)
+cAffixes:SetWidth(346)
+cAffixes:SetJustifyH("LEFT")
+local cHelp = craft:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+cHelp:SetPoint("BOTTOMLEFT", 0, 0)
+cHelp:SetWidth(346)
+cHelp:SetJustifyH("LEFT")
+cHelp:SetText("Choose an item on the left, then click an orb to use it. Orbs drop from creatures: more from elites, Champions and bosses. "
+    .. "Uncommon items carry up to 2 affixes, rare 3, epic and better 4. Class uniques and set powers are never touched.")
+local orbButtons = {}
+for i, o in ipairs(ORBS) do
+    local b = CreateFrame("Button", nil, craft)
+    Size(b, 168, 40)
+    b:SetPoint("TOPLEFT", ((i - 1) % 2) * 176, -150 - math.floor((i - 1) / 2) * 46)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    Size(b.icon, 36, 36)
+    b.icon:SetPoint("LEFT", 2, 0)
+    b.icon:SetTexture("Interface\\Icons\\" .. o.icon)
+    b.name = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.name:SetPoint("TOPLEFT", b.icon, "TOPRIGHT", 6, -2)
+    b.name:SetWidth(122)
+    b.name:SetJustifyH("LEFT")
+    b.name:SetText(o.name)
+    b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.count:SetPoint("BOTTOMLEFT", b.icon, "BOTTOMRIGHT", 6, 2)
+    b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    b.orb = i
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(o.name, 1, 0.82, 0)
+        GameTooltip:AddLine(o.text, 1, 1, 1, true)
+        GameTooltip:AddLine(string.format("You have %d.", (forgeData.orbs or {})[i] or 0), 0.5, 0.8, 1)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    b:SetScript("OnClick", function(self)
+        local it = forgeData.items[forgeSelected or ""]
+        if not it then UIErrorsFrame:AddMessage("Choose an item on the left first.", 1, 0.2, 0.2) return end
+        if ((forgeData.orbs or {})[self.orb] or 0) < 1 then UIErrorsFrame:AddMessage("You have none of those.", 1, 0.2, 0.2) return end
+        Send(string.format("FC:%d:%d:%d", self.orb, it.bag, it.slot))
+    end)
+    orbButtons[i] = b
+end
+
+forge.RefreshCraft = function(it)
+    if not it then
+        cName:SetText("|cff888888Choose an item on the left.|r")
+        cAffixes:SetText("")
+    else
+        cName:SetText((ItemLink(it) or "?"):gsub("[%[%]]", ""))
+        local lines = {}
+        for _, a in ipairs(it.affixes) do
+            local c = ({ [0] = "ffffff", [1] = "1eff00", [2] = "a335ee" })[a.rarity] or "ff8000"
+            lines[#lines + 1] = "|cff" .. c .. a.text .. "|r"
+        end
+        cAffixes:SetText(#lines > 0 and table.concat(lines, "\n") or "|cff888888No affixes.|r")
+    end
+    for i, b in ipairs(orbButtons) do
+        local n = (forgeData.orbs or {})[i] or 0
+        b.count:SetText(n > 0 and ("|cffffffff" .. n .. "|r") or "|cff8888880|r")
+        b.icon:SetDesaturated(n < 1)
+    end
+end
+end
+
 -- ---------------- the Power Codex page ----------------
 local codexPage = CreateFrame("Frame", nil, forge)
 codexPage:SetPoint("TOPLEFT", 18, -60)
@@ -5057,7 +5165,8 @@ end
 
 RefreshForge = function()
     forgeTier:SetText(string.format("World Tier |cffff9933%s|r. A piece reforges up to 3 tiers above where it dropped.", forgeData.tierName))
-    if forgeMode == "codex" then gearTab:UnlockHighlight() codexTab:LockHighlight() else codexTab:UnlockHighlight() gearTab:LockHighlight() end
+    gearTab:UnlockHighlight() codexTab:UnlockHighlight() forge.craftTab:UnlockHighlight()
+    if forgeMode == "codex" then codexTab:LockHighlight() elseif forgeMode == "craft" then forge.craftTab:LockHighlight() else gearTab:LockHighlight() end
     forgeMoney:SetText(WT.MoneyLine())
     local mats = {}
     for _, m in ipairs(forgeData.mats) do
@@ -5067,6 +5176,7 @@ RefreshForge = function()
     if forgeMode == "codex" then
         list:Hide()
         detail:Hide()
+        forge.craft:Hide()
         codexPage:Show()
         RefreshCodex()
         return
@@ -5096,6 +5206,13 @@ RefreshForge = function()
     end
 
     local it = forgeData.items[forgeSelected or ""]
+    if forgeMode == "craft" then
+        detail:Hide()
+        forge.craft:Show()
+        forge.RefreshCraft(it)
+        return
+    end
+    forge.craft:Hide()
     if not it then
         detail:Hide()
         return
@@ -5281,6 +5398,9 @@ function WT.OnForgeMessage(msg)
         local id = tonumber(f[1]) or 0
         WT.RUNE_NAMES[id] = f[3]
         table.insert(pendingForge.runes, { id = id, count = tonumber(f[2]) or 0, name = f[3] or "", text = f[4] or "" })
+    elseif cmd == "FC" and pendingForge then
+        pendingForge.orbs = {}
+        for n in (rest .. ","):gmatch("([^,]*),") do pendingForge.orbs[#pendingForge.orbs + 1] = tonumber(n) or 0 end
     elseif cmd == "FM" and pendingForge then
         local f = Split(rest, "|")
         table.insert(pendingForge.mats, { band = f[1] or "", essence = tonumber(f[2]) or 0, shards = tonumber(f[3]) or 0 })
@@ -5311,6 +5431,7 @@ end
 
 gearTab:SetScript("OnClick", function() forgeMode = "gear" RefreshForge() end)
 codexTab:SetScript("OnClick", function() forgeMode = "codex" RefreshForge() end)
+forge.craftTab:SetScript("OnClick", function() forgeMode = "craft" RefreshForge() end)
 
 forge:SetScript("OnShow", function()
     PlaySound("igCharacterInfoOpen")
@@ -8522,6 +8643,48 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Combo points for anyone (0.41): with skill gems any class can use finishers,
+-- but the game only shows combo points to Rogues and Druids, on a target they
+-- picked. The server sends CP|points; five pips under your portrait show them
+-- (not when the game's own already do).
+-- ---------------------------------------------------------------------------
+
+do
+    local bar = CreateFrame("Frame", "WorldTiersComboPoints", UIParent)
+    Size(bar, 5 * 18, 16)
+    bar:SetPoint("TOP", PlayerFrame or UIParent, "BOTTOM", 50, 28)
+    bar:Hide()
+    local pips = {}
+    for i = 1, 5 do
+        local t = bar:CreateTexture(nil, "ARTWORK")
+        Size(t, 14, 14)
+        t:SetPoint("LEFT", (i - 1) * 18, 0)
+        t:SetTexture("Interface\\ComboFrame\\ComboPoint")
+        t:SetTexCoord(0.5625, 1, 0, 1)
+        pips[i] = t
+    end
+    local points = 0
+    local function Draw()
+        local _, cls = UnitClass("player")
+        local native = (cls == "ROGUE" or cls == "DRUID") and UnitExists("target") and (GetComboPoints("player", "target") or 0) > 0
+        if points <= 0 or native then bar:Hide() return end
+        for i = 1, 5 do pips[i]:SetVertexColor(i <= points and 1 or 0.25, i <= points and 0.82 or 0.25, i <= points and 0 or 0.25) end
+        bar:Show()
+    end
+    function WT.OnComboMessage(msg)
+        local n = msg:match("^CP|(%d+)$")
+        if not n then return false end
+        points = tonumber(n) or 0
+        Draw()
+        return true
+    end
+    local ev = CreateFrame("Frame")
+    ev:RegisterEvent("PLAYER_TARGET_CHANGED")
+    ev:RegisterEvent("UNIT_COMBO_POINTS")
+    ev:SetScript("OnEvent", Draw)
+end
+
+-- ---------------------------------------------------------------------------
 -- Are this player's client files the ones the server expects? (CV|version|spell)
 -- The IsDead Launcher keeps them current; this catches anyone who started
 -- Wow.exe straight away after an update.
@@ -8576,7 +8739,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end
