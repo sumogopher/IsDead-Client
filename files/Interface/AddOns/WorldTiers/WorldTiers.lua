@@ -8684,6 +8684,40 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Use time (0.49): the global cooldown shrinks with your attack / cast speed.
+-- The client only knows a 200 ms one, so the server sends GCD|ms with the
+-- real length after each cast and the action bars' sweep shows that instead.
+-- ---------------------------------------------------------------------------
+
+do
+    local gStart, gDur = 0, 0
+    local function Apply(button)
+        if not button or not button.action or not button.cooldown then return end
+        if gDur <= 0 or GetTime() >= gStart + gDur then return end
+        if not HasAction(button.action) then return end
+        local kind = GetActionInfo(button.action)
+        if kind ~= "spell" and kind ~= "macro" then return end
+        local s, d = GetActionCooldown(button.action)
+        if s and d and s > 0 and d > 0.25 and s + d >= gStart + gDur then return end   -- its own cooldown is longer
+        CooldownFrame_SetTimer(button.cooldown, gStart, gDur, 1)
+    end
+    if type(ActionButton_UpdateCooldown) == "function" then
+        hooksecurefunc("ActionButton_UpdateCooldown", Apply)
+    end
+    local bars = { "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton",
+                   "MultiBarRightButton", "MultiBarLeftButton", "BonusActionButton" }
+    function WT.OnGcdMessage(msg)
+        local ms = msg:match("^GCD|(%d+)$")
+        if not ms then return false end
+        gStart, gDur = GetTime(), (tonumber(ms) or 0) / 1000
+        for _, b in ipairs(bars) do
+            for i = 1, 12 do Apply(_G[b .. i]) end
+        end
+        return true
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Combo points for anyone (0.41): with skill gems any class can use finishers,
 -- but the game only shows combo points to Rogues and Druids, on a target they
 -- picked. The server sends CP|points; five pips under your portrait show them
@@ -9430,7 +9464,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnComboMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end
