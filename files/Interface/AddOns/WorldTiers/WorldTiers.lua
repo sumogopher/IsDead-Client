@@ -7334,8 +7334,8 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- The World Tiers window: tier, Paragon, gear, Tier Key and the Signature
--- Keystone in one place (the menu spell and the Keeper open it)
+-- The World Tiers window: tier, gear, Tier Key, skills, the Vault and events
+-- in one place (the menu spell and the Keeper open it)
 -- ---------------------------------------------------------------------------
 
 do
@@ -7345,7 +7345,7 @@ do
         vault = { rows = {}, offers = {}, left = 0 }, events = {} }
     local function Flag(bit) return math.floor((hub.h.flags or 0) / bit) % 2 == 1 end
 
-    local W, H = 820, 590
+    local W, H = 820, 620   -- 0.49.2: a row of its own for the tabs
     local win = CreateFrame("Frame", "WorldTiersHubFrame", UIParent)
     Size(win, W, H)
     win:SetPoint("CENTER")
@@ -7366,21 +7366,21 @@ do
     local drag = CreateFrame("Frame", nil, win)
     drag:SetPoint("TOPLEFT", 12, -8)
     drag:SetPoint("TOPRIGHT", -40, -8)
-    drag:SetHeight(44)
+    drag:SetHeight(42)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart", function() win:StartMoving() end)
     drag:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
 
     local crest = win:CreateTexture(nil, "ARTWORK")
-    Size(crest, 40, 40)
-    crest:SetPoint("TOPLEFT", 24, -18)
+    Size(crest, 34, 34)
+    crest:SetPoint("TOPLEFT", 22, -15)
     crest:SetTexture("Interface\\Icons\\Spell_Holy_EmpowerChampion")
     local title = win:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    title:SetPoint("TOPLEFT", crest, "TOPRIGHT", 10, -2)
+    title:SetPoint("TOPLEFT", crest, "TOPRIGHT", 10, 1)
     title:SetText("World Tiers")
     local subtitle = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     local closeB = CreateFrame("Button", nil, win, "UIPanelCloseButton")
     closeB:SetPoint("TOPRIGHT", -6, -6)
 
@@ -7402,9 +7402,16 @@ do
         widget:SetScript("OnLeave", function() GameTooltip:Hide() end)
     end
 
-    -- the pages: Overview, Weekly Vault, Events (tabs at the top right)
+    -- the pages (0.49.2): each below the title and the tab row; the ones made here start 16 lower than they were
+    -- laid out, the Skills, Gems and Perks pages (made at y -60) 28 lower
+    local function Place(page, off)
+        page:ClearAllPoints()
+        page:SetPoint("TOPLEFT", win, "TOPLEFT", 0, -off)
+        page:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", 0, 0)
+    end
+    hub.Place = Place
     local overview = CreateFrame("Frame", nil, win)
-    overview:SetAllPoints()
+    Place(overview, 16)
     hub.pages = { overview = overview }
 
     -- a section: a dark inset with a gold header and a rule under it
@@ -7500,7 +7507,7 @@ do
     normalB:SetScript("OnClick", function() Send("WT:0") end)
 
     -- ======================= Tier Key =======================
-    local keyS = Section(20, -330, 390, 200, "Tier Key")
+    local keyS = Section(20, -330, 390, 254, "Tier Key")
     local keyIcon = keyS:CreateTexture(nil, "ARTWORK")
     Size(keyIcon, 36, 36)
     keyIcon:SetPoint("TOPLEFT", 14, -38)
@@ -7577,7 +7584,11 @@ do
         tiles[i] = t
         return t
     end
-    local paragonT = Tile(1, "Spell_Holy_EmpowerChampion", "Passive Tree", function() win:Hide() if WT.OpenPassive then WT.OpenPassive() end end)
+    -- 0.49.2: the passive tree has its button at the top now; Auto-Sell takes its tile
+    local paragonT = Tile(1, "INV_Misc_Coin_02", "Auto-Sell", function()
+        win:Hide()
+        if WT.SellFrame then WT.SellFrame:Show() end
+    end)
     local forgeT = Tile(2, "Trade_BlackSmithing", "The Forge", function() win:Hide() Send("WF") end)
     local transmogT = Tile(3, "INV_Arcane_Orb", "Transmogrify", function() win:Hide() Send("WX") end)
     local pouchT = Tile(4, "INV_Misc_Bag_10", "Materials Pouch", function() win:Hide() Send("WM") end)
@@ -7589,7 +7600,7 @@ do
     pouchT.sub:SetText("Every crafting material")
     forgeT.sub:SetText("Reforge, reroll affixes")
     reportT.sub:SetText("Item levels, in chat")
-    TipOn(paragonT, function() return "Paragon Board", "Spend Paragon points on stats and keystones. Also /paragon." end)
+    TipOn(paragonT, function() return "Auto-Sell", "Choose what sells itself the moment you loot it. Sold items stay in buyback. Also /autosell." end)
     TipOn(reforgeT, function()
         if hub.reforge[1] > 0 then return "Quick Reforge", "Bring every piece you wear up to your current tier, paying Essence from bosses at that tier as well as gold." end
         return "Quick Reforge", "Everything you wear is already at your tier, or as high as it can go."
@@ -7602,7 +7613,7 @@ do
 
     -- ======================= Signature Keystone =======================
     -- (the left half; the Ascendancy beside it, built in BuildAscendancy)
-    local sigS = Section(418, -330, 188, 200, "Signature Keystone")
+    local sigS = Section(418, -330, 188, 254, "Signature Keystone")
     local sigFrame = CreateFrame("Button", nil, sigS)
     Size(sigFrame, 40, 40)
     sigFrame:SetPoint("TOPLEFT", 12, -38)
@@ -7617,7 +7628,7 @@ do
     local sigName = Text(sigS, "GameFontNormal", 58, -40, 120)
     sigName:SetTextColor(0.75, 0.5, 1)
     local sigText = Text(sigS, "GameFontHighlightSmall", 12, -84, 164)
-    sigText:SetHeight(72)
+    sigText:SetHeight(100)
     sigText:SetJustifyV("TOP")
     local chooseB = Button(sigS, 100, 22, "Choose...")
     chooseB:SetPoint("BOTTOMLEFT", 12, 12)
@@ -7733,7 +7744,7 @@ do
         local low, high = _G["WorldTiersXpRateSliderLow"], _G["WorldTiersXpRateSliderHigh"]
         local value = _G["WorldTiersXpRateSliderText"]
         local note = Text(pop, "GameFontDisableSmall", 14, -72, 272)
-        note:SetText("Levels 1-80 only. Paragon is never affected. World Tier and event bonuses still add on top.")
+        note:SetText("While levelling. World Tier and event bonuses still add on top.")
         local setB = Button(pop, 80, 22, "Set")
         setB:SetPoint("BOTTOMRIGHT", -12, 10)
         local function Label(v, max)
@@ -7760,7 +7771,7 @@ do
         end)
         TipOn(b, function()
             return "Experience rate", string.format("How fast you level: from Off up to the server's %dx. Kills, quests and exploration. "
-                .. "Paragon experience is never affected. Also /wtxp <rate>.", hub.xp.max)
+                .. "Also /wtxp <rate>.", hub.xp.max)
         end)
         local function Refresh()
             local x = hub.xp
@@ -7778,7 +7789,7 @@ do
     -- (the right half beside the Signature Keystone; the four to choose from
     -- are in the Ascendancy window, ascend.lua)
     local function BuildAscendancy()
-        local s = Section(612, -330, 188, 200, "Ascendancy")
+        local s = Section(612, -330, 188, 254, "Ascendancy")
         local iconB = CreateFrame("Button", nil, s)
         Size(iconB, 40, 40)
         iconB:SetPoint("TOPLEFT", 12, -38)
@@ -7793,7 +7804,7 @@ do
         local name = Text(s, "GameFontNormal", 58, -40, 120)
         name:SetTextColor(1, 0.5, 0)
         local text = Text(s, "GameFontHighlightSmall", 12, -84, 164)
-        text:SetHeight(72)
+        text:SetHeight(100)
         text:SetJustifyV("TOP")
         local b = Button(s, 100, 22, "Choose...")
         b:SetPoint("BOTTOMLEFT", 12, 12)
@@ -7845,11 +7856,9 @@ do
     local RefreshAscendancy = BuildAscendancy()
 
     -- ======================= Footer =======================
-    local helpB = Button(overview, 140, 24, "How It Works")
-    helpB:SetPoint("BOTTOMLEFT", 24, 22)
-    helpB:SetScript("OnClick", function() Send("WQ") end)
     local respecB = Button(overview, 220, 24, "Reset Paragon Board")
-    respecB:SetPoint("BOTTOMRIGHT", -24, 22)
+    respecB:SetPoint("BOTTOMRIGHT", -24, 18)
+    respecB:Hide()   -- 0.49.2: the Paragon Board is retired (the passive tree has its own reset)
     respecB:SetScript("OnClick", function()
         local g = hub.h.respecGold or 0
         StaticPopup_Show("WORLDTIERS_HUB_RESPEC", g > 0 and (" for " .. g .. " gold") or "")
@@ -7859,11 +7868,11 @@ do
         OnAccept = function() Send("WB") end, timeout = 0, whileDead = 1, hideOnEscape = 1,
     }
     -- one switch for every always-on keystone (auras, forms, companions)
-    local auraB = Button(overview, 230, 24, "Keystone Auras: On")
-    auraB:SetPoint("BOTTOM", 0, 22)
+    local auraB = Button(sigS, 62, 22, "Auras")   -- 0.49.2: beside the keystone it belongs to
+    auraB:SetPoint("BOTTOMRIGHT", -12, 12)
     auraB:SetScript("OnClick", function() Send("WA") end)
     TipOn(auraB, function()
-        return "Keystone Auras", "Turns every always-on keystone off or on at once: auras like Living Consecration, permanent forms, "
+        return "Keystone Auras: " .. (WT.ksAuras == false and "off" or "on"), "Click to turn every always-on keystone off or on at once: auras like Living Consecration, permanent forms, "
             .. "and companions. They also step aside by themselves while you ride. Also /wtaura."
     end)
 
@@ -7893,14 +7902,14 @@ do
 
         -- ---------------- Weekly Vault ----------------
         local vault = CreateFrame("Frame", nil, win)
-        vault:SetAllPoints()
+        Place(vault, 16)
         vault:Hide()
         hub.pages.vault = vault
         local rowsS = Section(20, -72, 780, 300, "Weekly Vault: this week", vault)
         local ROW_TEXT = {
             [0] = "Finish Tier Keys, any level. Rewards: gear at your tier plus your best key's level.",
             [1] = "Kill dungeon or raid bosses at World Tier I or higher. Rewards: gear at your best tier.",
-            [2] = "Gain levels: character or Paragon. Rewards: Essence (or gold before your first tier).",
+            [2] = "Gain levels. Rewards: Essence (or gold before your first tier).",
         }
         local ROW_ICON = { [0] = "INV_Misc_Key_13", [1] = "Achievement_Boss_KingYmiron_01", [2] = "Spell_Holy_EmpowerChampion" }
         local rows = {}
@@ -7932,7 +7941,7 @@ do
             end
             rows[r] = { name = name, bar = bar, slots = slots }
         end
-        local rewardS = Section(20, -380, 780, 152, "Weekly Vault: your reward", vault)
+        local rewardS = Section(20, -380, 780, 204, "Weekly Vault: your reward", vault)
         local rewardNote = Text(rewardS, "GameFontHighlightSmall", 14, -40, 750)
         local offerButtons = {}
         for i = 1, 9 do
@@ -8012,7 +8021,7 @@ do
 
         -- ---------------- Events ----------------
         local events = CreateFrame("Frame", nil, win)
-        events:SetAllPoints()
+        Place(events, 16)
         events:Hide()
         hub.pages.events = events
         local zoneS = Section(20, -72, 390, 208, "Empowered Zone", events)
@@ -8050,7 +8059,7 @@ do
         wk.reward:SetTextColor(0.6, 1, 0.6)
         wk.next = Text(weekS, "GameFontDisableSmall", 14, -112, 750)
 
-        local aboutS = Section(20, -434, 780, 98, "How events work", events)
+        local aboutS = Section(20, -434, 780, 150, "How events work", events)
         local about = Text(aboutS, "GameFontHighlightSmall", 14, -40, 750)
         about:SetText("Every hour a new zone and a new dungeon are empowered for each band of ten levels: these are the ones for "
             .. "your level. Go there for faster levelling, more Champions and Treasure Goblins, extra boss loot, and a reward chest "
@@ -8081,7 +8090,7 @@ do
             if e.zone and e.zone ~= "" then
                 zb.name:SetText(e.zone)
                 zb.sub:SetText(string.format("For %s  -  %d min left this hour", e.band or "", e.minutes or 0))
-                zb.effects:SetText(string.format("+%s%% experience (and Paragon experience)\n%sx Champions\n%sx Treasure Goblins",
+                zb.effects:SetText(string.format("+%s%% experience\n%sx Champions\n%sx Treasure Goblins",
                     x.xp or "50", x.champ or "3", x.goblin or "3"))
                 zb.bar:SetMinMaxValues(0, math.max(1, e.goal or 1))
                 zb.bar:SetValue(math.min(e.kills or 0, e.goal or 1))
@@ -8098,7 +8107,7 @@ do
             if e.dungeon and e.dungeon ~= "" then
                 db.name:SetText(e.dungeon)
                 db.sub:SetText(string.format("For %s  -  %d min left this hour", e.band or "", e.minutes or 0))
-                db.effects:SetText(string.format("+%s%% experience (and Paragon experience)\n+%s boss loot roll%s\nReward chest for clearing it",
+                db.effects:SetText(string.format("+%s%% experience\n+%s boss loot roll%s\nReward chest for clearing it",
                     x.xp or "50", x.rolls or "1", (tonumber(x.rolls) or 1) == 1 and "" or "s"))
                 db.bar:SetMinMaxValues(0, 1)
                 db.bar:SetValue(e.dungeonDone and 1 or 0)
@@ -8126,7 +8135,7 @@ do
                 .. "- Level as usual. Every 10 levels you get a " .. W .. "Milestone Pack" .. E .. " (a bag), gold and rations in the mail.\n"
                 .. "- You know " .. W .. "every profession" .. E .. " already, and can ride from level 1.\n"
                 .. "- Once you are comfortable, pick a " .. W .. "World Tier" .. E .. " (Overview tab). Tier I is where the fun starts.\n"
-                .. "- Choose a " .. W .. "Signature Keystone" .. E .. " from level 10 (Overview tab): a power that changes how your class plays.\n"
+                .. "- Spend your " .. W .. "passive points" .. E .. " as you level (N, or the Passive Tree button at the top), and set up your " .. W .. "skill gems" .. E .. " (Gems and Skills tabs).\n"
                 .. "- Use the " .. W .. "Dungeon Finder" .. E .. " (the eye by your minimap, or I): solo queues go straight in, raids included.\n\n"
                 .. "Every topic on the left explains one part. This tab is always here: /wtguide opens it." },
             { "World Tiers", G .. "World Tiers" .. E .. "\n\n"
@@ -8141,38 +8150,34 @@ do
                 .. "- Below level 80 you can reach Tier II; past that opens at the level cap." },
             { "Gear and the Forge", G .. "Gear, affixes and the Forge" .. E .. "\n\n"
                 .. "- Gear is stamped with the tier it was earned at, and grows with it. Your tooltip shows the item level it counts as.\n"
-                .. "- Dropped gear rolls " .. W .. "affixes" .. E .. ": extra lines that grow with its tier. Rare drops can carry a " .. W .. "class unique" .. E
-                .. " that changes one of your spells (orange), or come out " .. W .. "Primal" .. E .. " (perfect affixes).\n"
-                .. "- " .. W .. "Class sets" .. E .. " (green): three for each class, one for each talent tree. A rare-or-better Head, Shoulders, "
-                .. "Chest, Hands, Legs or Feet can drop as a set piece; two pieces give the set's first bonus, four its second. "
-                .. "Uniques and set pieces glow in your bags; the character window's Gear tab shows what you wear.\n"
-                .. "- Legendaries and crafted rare-or-better gear keep pace with your level.\n"
-                .. "- The " .. W .. "Forge" .. E .. " (/forge) reforges a piece up to your current tier and rerolls its affixes, all at once "
-                .. "or one line at a time. It costs gold, Essence and Shards.\n"
+                .. "- Dropped gear rolls " .. W .. "affixes" .. E .. " (prefixes and suffixes, tier T1 the best), and its base has a built-in "
+                .. W .. "implicit" .. E .. " line. The best bases (" .. W .. "Superior" .. E .. " and " .. W .. "Elite" .. E .. ") drop at the high tiers.\n"
+                .. "- Gear and skill gems need " .. W .. "attributes" .. E .. " (Strength, Agility, Intellect): without them an item gives no affixes.\n"
+                .. "- " .. W .. "Uniques" .. E .. " (orange) have fixed lines; only their numbers roll, and a " .. W .. "Divine Orb" .. E .. " rerolls them. "
+                .. "A few chase uniques are very rare. A unique you find announces itself and glows in your bags.\n"
+                .. "- " .. W .. "Jewels" .. E .. " go in the passive tree's jewel sockets.\n"
+                .. "- The " .. W .. "Forge" .. E .. " (/forge) reforges a piece up to your current tier and uses crafting orbs on it. "
+                .. "It costs gold, Essence and Shards.\n"
                 .. "- " .. W .. "Runes" .. E .. " drop from bosses at higher tiers: forge one into a piece for a special effect.\n"
-                .. "- Wearing several pieces from the same affix family gives a set bonus.\n"
-                .. "- The " .. W .. "Power Codex" .. E .. " (the Forge's second tab, or /codex): extract a class unique there (the piece is "
-                .. "destroyed) to keep its power for your whole account, then imprint it onto any rare or better piece.\n"
                 .. "- " .. W .. "Treasure Maps" .. E .. " drop from Champions, bosses, Tier Keys and Treasure Goblins. Use one to see "
                 .. "where it leads (a compass points the way), and again at the spot to dig. Better maps have guardians and "
                 .. "better chests; four Map Fragments make a Legendary Map." },
-            { "Paragon and Keystones", G .. "Paragon and Keystones" .. E .. "\n\n"
-                .. "- Experience past the level cap fills " .. W .. "Paragon levels" .. E .. ", without end. Each gives a point.\n"
-                .. "- Spend points on the " .. W .. "Paragon Board" .. E .. " (/paragon): fourteen arms, one for every stat, your class's most useful first. Walk out from the centre; "
-                .. "notables are big steps, and branches off them end in " .. W .. "keystones" .. E .. ".\n"
-                .. "- Keystones change how you play. A few can be switched on at once; " .. W .. "class keystones" .. E
-                .. " are built around your class's own spells.\n"
-                .. "- Shift-click a node to take the whole path to it. Search finds any stat or keystone. Three loadouts save whole boards.\n"
-                .. "- Your " .. W .. "Signature Keystone" .. E .. " (Overview tab, from level 10) is a class keystone that is always on, "
-                .. "outside the board's slots, long before Paragon.\n"
-                .. "- Keystones that strike by themselves run as auras: /wtaura (or the Overview button) switches them all on or off.\n"
-                .. "- " .. W .. "Ascendancies" .. E .. " (from level 80, Overview tab beside your Signature Keystone, or /ascend): choose one of four "
-                .. "for your class, each a big power of its own on top of any talents and keystones. Free to change out of combat.\n"
-                .. "- " .. W .. "Glyphs" .. E .. ": each arm's second notable has a socket. A glyph boosts the matching nodes near it and "
-                .. "has a bonus of its own. 72 to find, from Tier Keys and raid or world bosses (more often at higher tiers); "
-                .. "they level up as you use them. The Glyphs button on the board shows your collection.\n"
-                .. "- Capped stats never waste points: past their caps Crit adds critical damage, Haste shortens cooldowns, "
-                .. "Leech turns overhealing into a shield, Avoidance into less damage taken, Movement into mounted speed." },
+            { "Passive Tree and Skills", G .. "Passive Tree, skills and gems" .. E .. "\n\n"
+                .. "- The " .. W .. "passive tree" .. E .. " (N, /passive, or the button at the top) is one huge board; each class starts in its "
+                .. "own place. You get a point every level, 2 at every fifth and 3 at every tenth: 130 by level 100.\n"
+                .. "- Take nodes next to your path; shift-click takes the whole way. " .. W .. "Notables" .. E .. " are big steps, "
+                .. W .. "keystones" .. E .. " change the rules, and " .. W .. "jewel sockets" .. E .. " hold jewels.\n"
+                .. "- Points are free to move back while you are low level; after that an " .. W .. "Orb of Regret" .. E
+                .. " gives one back, and Start over resets everything for gold.\n"
+                .. "- " .. W .. "Skill gems" .. E .. " (Gems tab): the skills in your slots are the ones you know, whatever your class. "
+                .. "They level as you use them.\n"
+                .. "- " .. W .. "Support gems" .. E .. " (Skills tab) link into a skill's sockets and change how it works. "
+                .. "Cast on Crit and the other trigger gems cast for you, with no global cooldown.\n"
+                .. "- " .. W .. "Speed" .. E .. ": attack and cast speed shorten the global cooldown, down to 0.2 sec.\n"
+                .. "- Your " .. W .. "Signature Keystone" .. E .. " (Overview tab, from level 10) is a class keystone that is always on. "
+                .. "/wtaura (or the Overview button) switches the ones that strike by themselves on or off.\n"
+                .. "- " .. W .. "Ascendancies" .. E .. " (from level 80, Overview tab, or /ascend): one of four for your class, "
+                .. "each a big power of its own. Free to change out of combat." },
             { "Dungeons and Raids", G .. "Dungeons and Raids" .. E .. "\n\n"
                 .. "- The " .. W .. "Dungeon Finder" .. E .. " works solo: queue, and you go straight in. Loot is yours, no rolls.\n"
                 .. "- Dungeons and raids are " .. W .. "sized to who is inside" .. E .. ": alone they are made for one, and get harder "
@@ -8190,7 +8195,7 @@ do
                 .. "- Keys you finish count towards your Weekly Vault." },
             { "Vault and Events", G .. "Weekly Vault" .. E .. "\n\n"
                 .. "- Three rows fill during the week: " .. W .. "Tier Keys" .. E .. " finished, " .. W .. "bosses" .. E .. " killed at Tier I or higher, "
-                .. "and " .. W .. "levels" .. E .. " gained (character or Paragon).\n"
+                .. "and " .. W .. "levels" .. E .. " gained.\n"
                 .. "- Each threshold opens a reward slot. At the weekly reset you choose one reward from the slots you opened.\n\n"
                 .. G .. "Events" .. E .. "\n\n"
                 .. "- Every hour, one zone and one dungeon for your level range are " .. W .. "empowered" .. E .. ": more experience, more "
@@ -8214,7 +8219,8 @@ do
             { "Commands", G .. "Commands" .. E .. "\n\n"
                 .. W .. "/worldtiers" .. E .. "  this window\n"
                 .. W .. "/wtguide" .. E .. "  this guide\n"
-                .. W .. "/paragon" .. E .. "  the Paragon Board\n"
+                .. W .. "/passive" .. E .. "  the passive tree (or N)\n"
+                .. W .. "/ascend" .. E .. "  your Ascendancy\n"
                 .. W .. "/forge" .. E .. "  the Forge\n"
                 .. W .. "/pouch" .. E .. "  the Materials Pouch\n"
                 .. W .. "/autosell" .. E .. "  Auto-Sell\n"
@@ -8222,14 +8228,14 @@ do
                 .. W .. "/wtaura" .. E .. "  keystone auras on / off\n"
                 .. W .. "/atlas" .. E .. "  every instance map\n\n"
                 .. W .. ".tier" .. E .. "  your tier and progress     " .. W .. ".tier gear" .. E .. "  what your gear counts as\n"
-                .. W .. ".tier gold" .. E .. "  wallet and Gold Reserve     " .. W .. ".paragon" .. E .. "  your Paragon level and points" },
+                .. W .. ".tier gold" .. E .. "  wallet and Gold Reserve" },
         }
         local guide = CreateFrame("Frame", nil, win)
-        guide:SetAllPoints()
+        Place(guide, 16)
         guide:Hide()
         hub.pages.guide = guide
-        local listS = Section(20, -72, 190, 496, "Topics", guide)
-        local textS = Section(218, -72, 582, 496, "", guide)
+        local listS = Section(20, -72, 190, 512, "Topics", guide)
+        local textS = Section(218, -72, 582, 512, "", guide)
         local scroll = CreateFrame("ScrollFrame", "WorldTiersGuideScroll", textS, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 14, -12)
         scroll:SetPoint("BOTTOMRIGHT", -32, 12)
@@ -8261,73 +8267,120 @@ do
         -- ---------------- the Paragon Board, Keystones and Skills (0.37) ----------------
         local helpers = { Section = Section, Button = Button, Tip = Tip }
         local paragonPage = CreateFrame("Frame", nil, win)
-        paragonPage:SetAllPoints()
+        Place(paragonPage, 28)
         paragonPage:Hide()
         hub.pages.paragon = paragonPage
         local keystonesPage = CreateFrame("Frame", nil, win)
-        keystonesPage:SetAllPoints()
+        Place(keystonesPage, 28)
         keystonesPage:Hide()
         hub.pages.keystones = keystonesPage
         if WT.BuildKeystonesPage then WT.BuildKeystonesPage(keystonesPage, helpers) end
         local skillsPage = CreateFrame("Frame", nil, win)
-        skillsPage:SetAllPoints()
+        Place(skillsPage, 28)
         skillsPage:Hide()
         hub.pages.skills = skillsPage
         if WT.BuildSkillsPage then WT.BuildSkillsPage(skillsPage, helpers) end
         local perksPage = CreateFrame("Frame", nil, win)
-        perksPage:SetAllPoints()
+        Place(perksPage, 28)
         perksPage:Hide()
         hub.pages.perks = perksPage
         if WT.BuildPerksPage then WT.BuildPerksPage(perksPage, helpers) end
         local gemsPage = CreateFrame("Frame", nil, win)
-        gemsPage:SetAllPoints()
+        Place(gemsPage, 28)
         gemsPage:Hide()
         hub.pages.gems = gemsPage
         if WT.BuildSkillGemsPage then WT.BuildSkillGemsPage(gemsPage, helpers) end
         win:HookScript("OnHide", function() if WT.UnembedBoard then WT.UnembedBoard() end end)
 
-        -- ---------------- the tabs ----------------
+        -- ---------------- the tabs (0.49.2) ----------------
+        -- one row of their own under the title: the pages of this window on the left, the windows of their own
+        -- (the passive tree and the Forge) on the right, marked with their icons
+        local strip = CreateFrame("Frame", nil, win)
+        strip:SetPoint("TOPLEFT", 16, -56)
+        strip:SetPoint("TOPRIGHT", -16, -56)
+        strip:SetHeight(26)
+        strip:SetFrameLevel(win:GetFrameLevel() + 20)
+        local stripLine = strip:CreateTexture(nil, "ARTWORK")
+        stripLine:SetTexture(0.75, 0.6, 0.3, 0.45)
+        stripLine:SetHeight(1)
+        stripLine:SetPoint("BOTTOMLEFT", 0, -1)
+        stripLine:SetPoint("BOTTOMRIGHT", 0, -1)
+        local function TabButton(label, w, icon)
+            local t = CreateFrame("Button", nil, strip)
+            Size(t, w, 26)
+            t.bg = t:CreateTexture(nil, "BACKGROUND")
+            t.bg:SetAllPoints()
+            t.line = t:CreateTexture(nil, "ARTWORK")
+            t.line:SetTexture(1, 0.78, 0.3, 1)
+            t.line:SetHeight(2)
+            t.line:SetPoint("BOTTOMLEFT", 3, 0)
+            t.line:SetPoint("BOTTOMRIGHT", -3, 0)
+            local hl = t:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetTexture(1, 0.85, 0.5, 0.12)
+            t.text = t:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            t.text:SetText(label)
+            if icon then
+                t.icon = t:CreateTexture(nil, "ARTWORK")
+                Size(t.icon, 16, 16)
+                t.icon:SetPoint("LEFT", 8, 0)
+                t.icon:SetTexture("Interface\\Icons\\" .. icon)
+                t.text:SetPoint("LEFT", t.icon, "RIGHT", 6, 0)
+            else
+                t.text:SetPoint("CENTER", 0, 1)
+            end
+            t.Select = function(self, on)
+                if on then
+                    self.bg:SetTexture(0.3, 0.22, 0.1, 0.9)
+                    self.line:Show()
+                    self.text:SetTextColor(1, 0.82, 0)
+                else
+                    self.bg:SetTexture(0.1, 0.09, 0.07, 0.75)
+                    self.line:Hide()
+                    self.text:SetTextColor(0.78, 0.78, 0.78)
+                end
+            end
+            t:Select(false)
+            return t
+        end
         local tabs = {}
         local function ShowPage(name)
+            if name == "paragon" or name == "keystones" then   -- 0.48.2: the passive tree has their place
+                win:Hide()
+                if WT.OpenPassive then WT.OpenPassive() end
+                return
+            end
+            if not hub.pages[name] then name = "overview" end
             hub.page = name
             for k, pg in pairs(hub.pages) do if k == name then pg:Show() else pg:Hide() end end
-            for k, t in pairs(tabs) do if k == name then t:LockHighlight() else t:UnlockHighlight() end end
+            for k, t in pairs(tabs) do t:Select(k == name) end
             if name ~= "overview" and picker then picker:Hide() end
-            if name == "paragon" then
-                if WT.EmbedBoard then WT.EmbedBoard(paragonPage) end
-            elseif WT.UnembedBoard then
-                WT.UnembedBoard()
-            end
+            if WT.UnembedBoard then WT.UnembedBoard() end
         end
         WT.hubShowPage = ShowPage
-        local order = { { "guide", "Guide", 56 }, { "overview", "Overview", 76 }, { "vault", "Vault", 54 },
-            { "events", "Events", 60 }, { "paragon", "Passive Tree", 96 }, { "forge", "Forge", 56 }, { "skills", "Skills", 56 },
-            { "gems", "Gems", 52 }, { "perks", "Perks", 54 } }
-        local right = -44
-        for i = #order, 1, -1 do
-            local key, label, w = order[i][1], order[i][2], order[i][3]
-            local t = Button(win, w, 24, label)
-            t:SetPoint("TOPRIGHT", right, -24)
-            t:SetFrameLevel(win:GetFrameLevel() + 20)   -- above the drag strip and the pages
-            right = right - w - 4
-            -- 0.48.2: the Paragon Board is gone: its tab opens the passive tree
-            t:SetScript("OnClick", function()
-                if key == "paragon" then
-                    win:Hide()
-                    if WT.OpenPassive then WT.OpenPassive() end
-                elseif key == "forge" then
-                    win:Hide()
-                    Send("WF")   -- the Forge (0.48.3)
-                else
-                    ShowPage(key)
-                end
-            end)
+        local order = { { "overview", "Overview", 84 }, { "skills", "Skills", 64 }, { "gems", "Gems", 60 }, { "perks", "Perks", 62 },
+            { "vault", "Vault", 60 }, { "events", "Events", 66 }, { "guide", "Guide", 62 } }
+        local x = 0
+        for _, o in ipairs(order) do
+            local key = o[1]
+            local t = TabButton(o[2], o[3])
+            t:SetPoint("BOTTOMLEFT", x, 0)
+            x = x + o[3] + 3
+            t:SetScript("OnClick", function() PlaySound("igCharacterInfoTab") ShowPage(key) end)
             tabs[key] = t
         end
-        -- the drag strip stops short of the tabs, so a click on a tab is never a drag
-        drag:ClearAllPoints()
-        drag:SetPoint("TOPLEFT", 12, -8)
-        drag:SetPoint("TOPRIGHT", right - 4, -8)
+        local function Launcher(label, w, icon, anchor, tip, open)
+            local t = TabButton(label, w, icon)
+            if anchor then t:SetPoint("RIGHT", anchor, "LEFT", -3, 0) else t:SetPoint("BOTTOMRIGHT", 0, 0) end
+            t.text:SetTextColor(0.6, 0.85, 1)
+            t:SetScript("OnClick", function() win:Hide() open() end)
+            TipOn(t, function() return label, tip end)
+            return t
+        end
+        local forgeL = Launcher("Forge", 84, "Trade_BlackSmithing", nil, "Opens the Forge: reforge and craft your gear. Also /forge.",
+            function() Send("WF") end)
+        Launcher("Passive Tree", 118, "Spell_Holy_EmpowerChampion", forgeL, "Opens your passive tree. Also N, or /passive.",
+            function() if WT.OpenPassive then WT.OpenPassive() end end)
         hub.ShowPage = ShowPage
         ShowPage("overview")
     end
@@ -8337,7 +8390,11 @@ do
 
     local function Refresh()
         local h = hub.h
-        subtitle:SetText(string.format("Level %d  -  %s", h.level or UnitLevel("player"), WT.PassiveSummary and WT.PassiveSummary() or "Passive Tree"))
+        -- 0.49.2: level, tier and passive points at a glance
+        local pts = WT.PassiveSummary and WT.PassiveSummary() or ""
+        if pts == "Your passive tree" then pts = "" end
+        subtitle:SetText(string.format("Level %d   |cffff9933%s|r%s", h.level or UnitLevel("player"), h.tierName or "",
+            pts ~= "" and ("   " .. pts) or ""))
 
         -- tier
         local tiers = Flag(HF_TIERS)
@@ -8395,8 +8452,8 @@ do
         end
 
         -- tiles
-        paragonT:SetOn(true)   -- 0.46: the passive tree in the Paragon Board's place
-        paragonT.sub:SetText(WT.PassiveSummary and WT.PassiveSummary() or "Your passive tree")
+        paragonT:SetOn(WT.SellFrame ~= nil)
+        paragonT.sub:SetText("Sells itself as you loot")
         forgeT:SetOn(Flag(HF_GEAR))
         transmogT:SetOn(Flag(HF_TRANSMOG))
         pouchT:SetOn(Flag(HF_POUCH))
@@ -8404,7 +8461,7 @@ do
         reforgeT.sub:SetText(hub.reforge[1] > 0 and string.format("%d piece%s, %s", hub.reforge[1], hub.reforge[1] == 1 and "" or "s", hub.reforge[2])
             or "All at your tier")
         reportT:SetOn(Flag(HF_GEAR))
-        Enable(respecB, Flag(HF_PARAGON))
+
         respecB:SetText((h.respecGold or 0) > 0 and string.format("Reset Paragon Board (%dg)", h.respecGold) or "Reset Paragon Board")
 
         -- signature
@@ -8415,7 +8472,7 @@ do
             sigIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
             sigIcon:SetDesaturated(true)
             sigName:SetText("Not for your class yet")
-            sigText:SetText("Classes with their own Paragon Board choose one of their keystones here. Your class's board is on the way.")
+            sigText:SetText("Your class has no Signature Keystones yet.")
             chooseB:Disable()
             sigBorder:Hide()
         elseif lvl < (hub.sig.slot or 10) then
@@ -8447,7 +8504,8 @@ do
         if hub.RefreshEvents then hub.RefreshEvents() end
         RefreshAscendancy()
         RefreshXpRate()
-        auraB:SetText(WT.ksAuras == false and "Keystone Auras: |cffff6666Off|r" or "Keystone Auras: |cff66ff66On|r")
+        auraB:SetText(WT.ksAuras == false and "|cffff6666Off|r" or "|cff66ff66On|r")
+        if Flag(HF_SIGNATURE) then auraB:Show() else auraB:Hide() end
     end
     WT.RefreshHubAuras = function() if win:IsShown() then Refresh() end end
 
@@ -8975,43 +9033,58 @@ do
                       tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
     win:Hide()
     tinsert(UISpecialFrames, "WorldTiersPassiveFrame")
-    local titleBar = CreateFrame("Frame", nil, win)
-    titleBar:SetPoint("TOPLEFT", 8, -8)
-    titleBar:SetPoint("TOPRIGHT", -8, -8)
-    titleBar:SetHeight(28)
-    titleBar:EnableMouse(true)
-    titleBar:RegisterForDrag("LeftButton")
-    titleBar:SetScript("OnDragStart", function() win:StartMoving() end)
-    titleBar:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
-    local title = win:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 18, -14)
+    -- 0.49.2: one header strip, everything in it centred on one line and drawn above the tree, so nothing
+    -- overlaps the border or the nodes; the title's text stops short of the controls instead of running under them
+    local bar = CreateFrame("Frame", nil, win)
+    bar:SetPoint("TOPLEFT", 10, -10)
+    bar:SetPoint("TOPRIGHT", -10, -10)
+    bar:SetHeight(34)
+    bar:SetFrameLevel(win:GetFrameLevel() + 20)
+    bar:EnableMouse(true)
+    bar:RegisterForDrag("LeftButton")
+    bar:SetScript("OnDragStart", function() win:StartMoving() end)
+    bar:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
+    local barBg = bar:CreateTexture(nil, "BACKGROUND")
+    barBg:SetAllPoints()
+    barBg:SetTexture(0.08, 0.07, 0.05, 0.95)
+    local barLine = bar:CreateTexture(nil, "ARTWORK")
+    barLine:SetTexture(0.75, 0.6, 0.3, 0.5)
+    barLine:SetHeight(1)
+    barLine:SetPoint("BOTTOMLEFT")
+    barLine:SetPoint("BOTTOMRIGHT")
+    local title = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("LEFT", 10, 0)
     title:SetText("Passive Tree")
-    local info = win:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    info:SetPoint("LEFT", title, "RIGHT", 18, 0)
-    local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -4, -4)
-    local resetB = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
-    Size(resetB, 110, 22)
-    resetB:SetPoint("TOPRIGHT", -40, -12)
+    local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")   -- on the window: it hides its parent
+    close:SetFrameLevel(bar:GetFrameLevel() + 2)
+    close:SetPoint("RIGHT", bar, "RIGHT", 2, 0)
+    local resetB = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    Size(resetB, 120, 22)
+    resetB:SetPoint("RIGHT", close, "LEFT", -2, 0)
     resetB:SetText("Start over")
-    local homeB = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
-    Size(homeB, 90, 22)
+    local homeB = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    Size(homeB, 80, 22)
     homeB:SetPoint("RIGHT", resetB, "LEFT", -6, 0)
     homeB:SetText("My start")
-    local box = CreateFrame("EditBox", "WorldTiersPassiveSearch", win, "InputBoxTemplate")
-    Size(box, 150, 20)
+    local box = CreateFrame("EditBox", "WorldTiersPassiveSearch", bar, "InputBoxTemplate")
+    Size(box, 140, 20)
     box:SetPoint("RIGHT", homeB, "LEFT", -12, 0)
     box:SetAutoFocus(false)
-    local boxLabel = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local boxLabel = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     boxLabel:SetPoint("RIGHT", box, "LEFT", -8, 0)
     boxLabel:SetText("Search")
+    local info = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    info:SetPoint("LEFT", title, "RIGHT", 16, 0)
+    info:SetPoint("RIGHT", boxLabel, "LEFT", -12, 0)
+    info:SetJustifyH("LEFT")
+    info:SetHeight(20)
     local hint = win:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("BOTTOM", 0, 12)
     hint:SetText("Click: take a node next to your path.  Shift-click: take the whole way there.  Right-click: give one back.  Drag: move.  Wheel: zoom.")
 
     local view = CreateFrame("ScrollFrame", nil, win)
-    view:SetPoint("TOPLEFT", 12, -42)
-    view:SetPoint("BOTTOMRIGHT", -12, 30)
+    view:SetPoint("TOPLEFT", 10, -46)
+    view:SetPoint("BOTTOMRIGHT", -10, 30)
     local canvas = CreateFrame("Frame", nil, view)
     view:SetScrollChild(canvas)
     local bg = view:CreateTexture(nil, "BACKGROUND")
@@ -9315,7 +9388,7 @@ do
 
     local function Refresh()
         local free = st.points - st.spent
-        info:SetText(string.format("%s%d|r of %d points free     Orbs of Regret: %d", free > 0 and "|cff66ff66" or "|cffffffff", free, st.points, st.regret))
+        info:SetText(string.format("%s%d|r of %d points free    Orbs of Regret: %d", free > 0 and "|cff66ff66" or "|cffffffff", free, st.points, st.regret))
         resetB:SetText(st.reset > 0 and string.format("Start over (%dg)", st.reset) or "Start over")
         Draw()
     end
@@ -9334,6 +9407,9 @@ do
     local centred = false
     win:SetScript("OnShow", function()
         PlaySound("igCharacterInfoOpen")
+        -- 0.49.2: never bigger than the screen (a big UI scale or a small screen cut its top off)
+        local sw, sh = UIParent:GetWidth() or 1000, UIParent:GetHeight() or 700
+        Size(win, math.max(640, math.min(1000, sw - 40)), math.max(420, math.min(700, sh - 40)))
         Size(canvas, CW(), CW())
         Send("V")
     end)
