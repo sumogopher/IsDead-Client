@@ -5002,7 +5002,7 @@ local ORBS = {
     { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", text = "One more affix of any rarity (a rare one from World Tier VI), if the item has room." },
     { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", text = "One affix, at random, taken off." },
     { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", text = "Every affix taken off." },
-    { name = "Divine Orb", icon = "INV_Orb_Arcanite", text = "The size of every affix rerolled within its tier (70-100%). On a unique: its numbers rerolled (the only orb that works on one)." },
+    { name = "Divine Orb", icon = "INV_Enchant_AbyssCrystal", text = "The size of every affix rerolled within its tier (70-100%). On a unique: its numbers rerolled (the only orb that works on one)." },
 }
 WT.ORB_NAMES = {}
 for i, o in ipairs(ORBS) do WT.ORB_NAMES[i] = o.name end
@@ -8301,7 +8301,7 @@ do
         end
         WT.hubShowPage = ShowPage
         local order = { { "guide", "Guide", 56 }, { "overview", "Overview", 76 }, { "vault", "Vault", 54 },
-            { "events", "Events", 60 }, { "paragon", "Passive Tree", 96 }, { "skills", "Skills", 56 },
+            { "events", "Events", 60 }, { "paragon", "Passive Tree", 96 }, { "forge", "Forge", 56 }, { "skills", "Skills", 56 },
             { "gems", "Gems", 52 }, { "perks", "Perks", 54 } }
         local right = -44
         for i = #order, 1, -1 do
@@ -8315,6 +8315,9 @@ do
                 if key == "paragon" then
                     win:Hide()
                     if WT.OpenPassive then WT.OpenPassive() end
+                elseif key == "forge" then
+                    win:Hide()
+                    Send("WF")   -- the Forge (0.48.3)
                 else
                     ShowPage(key)
                 end
