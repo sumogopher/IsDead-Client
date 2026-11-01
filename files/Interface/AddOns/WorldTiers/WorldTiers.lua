@@ -3979,6 +3979,10 @@ local function Decorate(tip, info)
                 tip:AddLine(string.format("(%d) %s", need, f[2 + i] or ""), on and 0.7 or 0.5, on and 1 or 0.5, on and 0.8 or 0.5, true)
             end
             if f[5] and f[5] ~= "" then tip:AddLine(f[5], 1, 0.3, 0.3) end
+        elseif a.rarity == 5 and a.text:find("^Requires ") then
+            -- what it needs (0.47): on its own, ruled off from the item's lines below, as in Path of Exile
+            tip:AddLine(a.text, 1, 1, 1, true)
+            tip:AddLine("--------", 0.4, 0.4, 0.4)
         elseif a.rarity == 10 then
             special = special or "U"   -- a unique item (0.44): its lines, the orange name and border
             tip:AddLine(a.text, c[1], c[2], c[3], true)
@@ -8297,7 +8301,7 @@ do
         end
         WT.hubShowPage = ShowPage
         local order = { { "guide", "Guide", 56 }, { "overview", "Overview", 76 }, { "vault", "Vault", 54 },
-            { "events", "Events", 60 }, { "paragon", "Paragon", 68 }, { "keystones", "Keystones", 78 }, { "skills", "Skills", 56 },
+            { "events", "Events", 60 }, { "paragon", "Passive Tree", 96 }, { "skills", "Skills", 56 },
             { "gems", "Gems", 52 }, { "perks", "Perks", 54 } }
         local right = -44
         for i = #order, 1, -1 do
@@ -8306,7 +8310,15 @@ do
             t:SetPoint("TOPRIGHT", right, -24)
             t:SetFrameLevel(win:GetFrameLevel() + 20)   -- above the drag strip and the pages
             right = right - w - 4
-            t:SetScript("OnClick", function() ShowPage(key) end)
+            -- 0.48.2: the Paragon Board is gone: its tab opens the passive tree
+            t:SetScript("OnClick", function()
+                if key == "paragon" then
+                    win:Hide()
+                    if WT.OpenPassive then WT.OpenPassive() end
+                else
+                    ShowPage(key)
+                end
+            end)
             tabs[key] = t
         end
         -- the drag strip stops short of the tabs, so a click on a tab is never a drag
@@ -8322,7 +8334,7 @@ do
 
     local function Refresh()
         local h = hub.h
-        subtitle:SetText(string.format("Level %d  -  Paragon %d", h.level or UnitLevel("player"), h.paragon or 0))
+        subtitle:SetText(string.format("Level %d  -  %s", h.level or UnitLevel("player"), WT.PassiveSummary and WT.PassiveSummary() or "Passive Tree"))
 
         -- tier
         local tiers = Flag(HF_TIERS)
@@ -9325,6 +9337,18 @@ do
     SLASH_WORLDTIERSPASSIVE1 = "/passive"
     SLASH_WORLDTIERSPASSIVE2 = "/tree"
     SlashCmdList["WORLDTIERSPASSIVE"] = function() WT.OpenPassive() end
+    -- 0.48.2: the Talents key (N) and the Talents button open the passive tree instead
+    local talentHook = CreateFrame("Frame")
+    talentHook:RegisterEvent("PLAYER_LOGIN")
+    talentHook:RegisterEvent("ADDON_LOADED")
+    talentHook:SetScript("OnEvent", function()
+        ToggleTalentFrame = function() WT.OpenPassive() end
+        if PlayerTalentFrame and PlayerTalentFrame:IsShown() then HideUIPanel(PlayerTalentFrame) end
+        if TalentMicroButton then
+            TalentMicroButton:SetScript("OnClick", function() WT.OpenPassive() end)
+            TalentMicroButton.tooltipText = "Passive Tree"
+        end
+    end)
 end
 
 -- level 100 (0.46): the game hides the experience bar at its own cap (80); ours is 100
@@ -9409,6 +9433,7 @@ frame:SetScript("OnHide", function() PlaySound("igCharacterInfoClose") end)
 SLASH_WORLDTIERSPARAGON1 = "/paragon"
 SLASH_WORLDTIERSPARAGON2 = "/wt"
 SlashCmdList["WORLDTIERSPARAGON"] = function()
+    if WT.OpenPassive then WT.OpenPassive() return end   -- 0.48.2: the Paragon Board is gone
     if frame:IsShown() then frame:Hide() else frame:Show() end
 end
 
