@@ -8726,23 +8726,25 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- The mana shield (0.43.1): cloth's defence, a pool taken before health. The
--- server sends MSH|current|most; a bar under your portrait shows it.
+-- The mana shield (0.43.1; 0.48.4: on the health bar itself): cloth's defence,
+-- a pool taken before health. The server sends MSH|current|most; a blue layer
+-- over your portrait's health bar shows it, so it goes wherever the player
+-- frame goes (Move Anything and the like move it with the frame).
 -- ---------------------------------------------------------------------------
 
 do
-    local bar = CreateFrame("StatusBar", "WorldTiersManaShield", UIParent)
-    Size(bar, 119, 9)
-    bar:SetPoint("TOPLEFT", PlayerFrameManaBar or PlayerFrame or UIParent, "BOTTOMLEFT", 0, -2)
+    local host = PlayerFrameHealthBar or PlayerFrame or UIParent
+    local bar = CreateFrame("StatusBar", "WorldTiersManaShield", host)
+    bar:SetAllPoints(host)
+    bar:SetFrameLevel(host:GetFrameLevel() + 2)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    bar:SetStatusBarColor(0.45, 0.6, 1)
+    bar:SetStatusBarColor(0.35, 0.6, 1, 0.65)
     bar:SetMinMaxValues(0, 1)
+    bar:EnableMouse(false)
     bar:Hide()
-    local bg = bar:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(bar)
-    bg:SetTexture(0, 0, 0, 0.6)
-    local text = bar:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
-    text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    local text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
+    text:SetTextColor(0.75, 0.88, 1)
     function WT.OnShieldMessage(msg)
         local cur, most = msg:match("^MSH|(%d+)|(%d+)$")
         if not cur then return false end
@@ -8750,7 +8752,7 @@ do
         if most <= 0 then bar:Hide() return true end
         bar:SetMinMaxValues(0, most)
         bar:SetValue(cur)
-        text:SetText(cur .. " / " .. most)
+        text:SetText(cur > 0 and (cur >= 10000 and string.format("%.1fk", cur / 1000) or tostring(cur)) or "")
         bar:Show()
         return true
     end
