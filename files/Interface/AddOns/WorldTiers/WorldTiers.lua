@@ -3997,6 +3997,15 @@ local function Decorate(tip, info)
         end
     end
     if verse then
+        -- 0.49.3: not when the item's own description (the quoted line under its level) already says it
+        local tn = tip:GetName()
+        for i = 1, (tip.NumLines and tip:NumLines() or 0) do
+            local l = tn and _G[tn .. "TextLeft" .. i]
+            local t = l and l:GetText()
+            if type(t) == "string" and t:find(verse, 1, true) then verse = nil break end
+        end
+    end
+    if verse then
         tip:AddLine(" ")
         tip:AddLine(verse, AFFIX_COLOR[11][1], AFFIX_COLOR[11][2], AFFIX_COLOR[11][3], true)
     end
@@ -4093,8 +4102,10 @@ function WT.OnLootPreviewMessage(msg)
     local id = tonumber(f[1])
     if not id then return true end
     if cmd == "LX|" then
+        -- 0.49.3: the text is everything after the rarity: it can hold colour codes ("|cff..."), which Split would cut
+        local rarity, text = msg:match("^LX|[^|]*|(%d+)|(.*)$")
         lootAffixes[id] = lootAffixes[id] or {}
-        table.insert(lootAffixes[id], { rarity = tonumber(f[2]) or 0, text = f[3] or "" })
+        table.insert(lootAffixes[id], { rarity = tonumber(rarity) or 0, text = text or "" })
         return true
     end
     lootCache[id] = {
@@ -4177,10 +4188,13 @@ end
 -- I|bag|slot|entry|scaled|effIlvl|ownIlvl|stat|dps|armor|tier|power, and IC| (forget everything)
 function WT.OnItemMessage(msg)
     if msg:sub(1, 3) == "IX|" then
-        local f = Split(msg:sub(4), "|")
-        local key = f[1] .. ":" .. f[2]
+        -- 0.49.3: the text is everything after the rarity (colour codes in it would split it, cutting
+        -- "Requires 104 Strength" down to "Requires", and the affixes' tier and roll)
+        local bag, slot, rarity, text = msg:match("^IX|([^|]*)|([^|]*)|(%d+)|(.*)$")
+        if not bag then return true end
+        local key = bag .. ":" .. slot
         affixPending[key] = affixPending[key] or {}
-        table.insert(affixPending[key], { rarity = tonumber(f[3]) or 0, text = f[4] or "" })
+        table.insert(affixPending[key], { rarity = tonumber(rarity) or 0, text = text or "" })
         return true
     end
     if msg:sub(1, 3) == "IC|" then
