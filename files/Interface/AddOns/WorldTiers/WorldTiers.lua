@@ -9186,7 +9186,13 @@ do
         lines[i] = t
         return t
     end
-    local ROUND = { taken = "Interface\\COMMON\\Indicator-Yellow", open = "Interface\\COMMON\\Indicator-Green", locked = "Interface\\COMMON\\Indicator-Gray" }
+    -- 0.48.5: small nodes are a plain colour square by state; an icon that isn't in the client
+    -- falls back to the question mark (a texture that fails to load keeps the last one, which flickered as buttons
+    -- were reused)
+    local DISC_COLOR = { taken = { 1, 0.78, 0.2 }, open = { 0.35, 0.95, 0.4 }, locked = { 0.42, 0.42, 0.46 } }
+    local function Tex(t, path)
+        if not t:SetTexture(path) then t:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark") end
+    end
 
     Draw = function()
         if not win:IsShown() then return end
@@ -9210,7 +9216,8 @@ do
                 local have, open = Have(id), Open(id)
                 if kind == 5 then
                     local j = jewels[id]
-                    b.icon:SetTexture(j and GetItemIcon and GetItemIcon(j.entry) or "Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+                    Tex(b.icon, j and GetItemIcon and GetItemIcon(j.entry) or "Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+                    b.icon:SetVertexColor(1, 1, 1)
                     b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
                     b.icon:SetDesaturated(not have)
                     b.icon:SetAlpha(have and 1 or open and 0.95 or 0.6)
@@ -9219,20 +9226,24 @@ do
                     b.ring:SetAlpha(have and 1 or open and 0.7 or 0.35)
                     b.ring:Show()
                 elseif kind == 0 or kind == 4 then
-                    b.icon:SetTexture(have and ROUND.taken or open and ROUND.open or ROUND.locked)
+                    local c = have and DISC_COLOR.taken or open and DISC_COLOR.open or DISC_COLOR.locked
+                    b.icon:SetTexture(c[1], c[2], c[3])   -- a plain colour: always there
                     b.icon:SetTexCoord(0, 1, 0, 1)
                     b.icon:SetDesaturated(false)
-                    b.icon:SetAlpha(have and 1 or open and 0.9 or 0.55)
+                    b.icon:SetVertexColor(1, 1, 1)
+                    b.icon:SetAlpha(have and 1 or open and 0.95 or 0.7)
                     b.ring:Hide()
                 elseif kind == 3 then
-                    b.icon:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+                    Tex(b.icon, "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+                    b.icon:SetVertexColor(1, 1, 1)
                     local c = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[CLASS_TOKEN[id] or ""]
                     if c then b.icon:SetTexCoord(c[1], c[2], c[3], c[4]) end
                     b.icon:SetDesaturated(id ~= st.class)
                     b.icon:SetAlpha(id == st.class and 1 or 0.6)
                     b.ring:Hide()
                 else
-                    b.icon:SetTexture(kind == 2 and (P.ksicon[id] or "Interface\\Icons\\INV_Misc_QuestionMark") or "Interface\\Icons\\INV_Misc_Gem_Variety_02")
+                    Tex(b.icon, kind == 2 and (P.ksicon[id] or "Interface\\Icons\\INV_Misc_QuestionMark") or "Interface\\Icons\\INV_Misc_Gem_Variety_02")
+                    b.icon:SetVertexColor(1, 1, 1)
                     b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
                     b.icon:SetDesaturated(not have)
                     b.icon:SetAlpha(have and 1 or open and 0.95 or 0.6)
