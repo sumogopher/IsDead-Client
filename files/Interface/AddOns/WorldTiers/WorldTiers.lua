@@ -8709,6 +8709,37 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- The mana shield (0.43.1): cloth's defence, a pool taken before health. The
+-- server sends MSH|current|most; a bar under your portrait shows it.
+-- ---------------------------------------------------------------------------
+
+do
+    local bar = CreateFrame("StatusBar", "WorldTiersManaShield", UIParent)
+    Size(bar, 119, 9)
+    bar:SetPoint("TOPLEFT", PlayerFrameManaBar or PlayerFrame or UIParent, "BOTTOMLEFT", 0, -2)
+    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    bar:SetStatusBarColor(0.45, 0.6, 1)
+    bar:SetMinMaxValues(0, 1)
+    bar:Hide()
+    local bg = bar:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(bar)
+    bg:SetTexture(0, 0, 0, 0.6)
+    local text = bar:CreateFontString(nil, "OVERLAY", "TextStatusBarText")
+    text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    function WT.OnShieldMessage(msg)
+        local cur, most = msg:match("^MSH|(%d+)|(%d+)$")
+        if not cur then return false end
+        cur, most = tonumber(cur) or 0, tonumber(most) or 0
+        if most <= 0 then bar:Hide() return true end
+        bar:SetMinMaxValues(0, most)
+        bar:SetValue(cur)
+        text:SetText(cur .. " / " .. most)
+        bar:Show()
+        return true
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Are this player's client files the ones the server expects? (CV|version|spell)
 -- The IsDead Launcher keeps them current; this catches anyone who started
 -- Wow.exe straight away after an update.
@@ -8763,7 +8794,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnComboMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnBarMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnGlyphMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end

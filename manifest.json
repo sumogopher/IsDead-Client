@@ -1,6 +1,6 @@
 {
   "version": "0.37",
-  "cacheVersion": "044965044e6663b3",
+  "cacheVersion": "aa38127fa564fc94",
   "realmlist": "26.148.25.63",
   "news": "",
   "managedDirs": [
@@ -10,8 +10,8 @@
   "files": [
     {
       "path": "Data/enUS/patch-enUS-W.MPQ",
-      "size": 6452688,
-      "sha256": "93ab6e4f949a1aee7dab0abee03fa350a8d7199b7efc8f599e9293c79283c5a8",
+      "size": 6452737,
+      "sha256": "9431021d7552cb921bd4f8738ae81164bfe8226e403b25299afbd8b94ba12364",
       "localized": true
     },
     {
@@ -781,8 +781,8 @@
     },
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.lua",
-      "size": 422502,
-      "sha256": "20769c4e8e1d0725f077f4a6ff96a11dc720dfd5cdb162c0e354799834201012"
+      "size": 423832,
+      "sha256": "0c1af82d096008c37fd26e61feb5ad3b4dc7ea5a59ebbf7069454224d9f3f106"
     },
     {
       "path": "Interface/AddOns/WorldTiers/WorldTiers.toc",
