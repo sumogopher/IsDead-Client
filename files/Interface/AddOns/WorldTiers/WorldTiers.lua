@@ -3486,10 +3486,12 @@ local function Decorate(tip, info)
     if info.power ~= "" then
         tip:AddLine("Tier Power " .. info.power .. " damage", 1, 0.6, 0.2)
     end
-    local special, verse
+    local special, verse, itemRarity
     for _, a in ipairs(info.affixes) do
         local c = AFFIX_COLOR[a.rarity] or AFFIX_COLOR[0]
-        if a.rarity == 6 then
+        if a.rarity == 12 then
+            itemRarity = tonumber(a.text)   -- 0.51: Normal, Magic or Rare (drawn below, on the name)
+        elseif a.rarity == 6 then
             -- a class unique: its own block, the name in orange
             special = special or "U"
             local tree, uname, what = a.text:match("^%[Unique: ([^%]]+)%] ([^:]+): (.*)$")
@@ -3541,6 +3543,17 @@ local function Decorate(tip, info)
     if verse then
         tip:AddLine(" ")
         tip:AddLine(verse, AFFIX_COLOR[11][1], AFFIX_COLOR[11][2], AFFIX_COLOR[11][3], true)
+    end
+    if itemRarity and not special then
+        -- 0.51: the name in its rarity's colour, as in Path of Exile (white Normal, blue Magic, yellow Rare)
+        local col = itemRarity == 2 and { 1, 1, 0.47 } or itemRarity == 1 and { 0.53, 0.53, 1 } or { 1, 1, 1 }
+        local left, right = _G[name .. "TextLeft1"], _G[name .. "TextRight1"]
+        if left then left:SetTextColor(col[1], col[2], col[3]) end
+        if right and itemRarity > 0 then
+            right:SetText(itemRarity == 2 and "RARE" or "MAGIC")
+            right:SetTextColor(col[1], col[2], col[3])
+            right:Show()
+        end
     end
     if special then
         -- the name in its colour, a tag on the top line, and a coloured border
@@ -4175,7 +4188,8 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- The Forge: reforge one piece to your tier, reroll its affixes
+-- The Forge (0.51): crafting orbs on your gear, and runes. No reforging: an
+-- item keeps the level it dropped with, as in Path of Exile.
 -- ---------------------------------------------------------------------------
 
 local ROWS, ROW_H = 10, 40
@@ -4213,8 +4227,7 @@ function WT.MoneyLine()
     if #WT.reserve > 4 then line = line .. "   |cffffd100Reserve: " .. WT.GoldFromCopperString(WT.reserve) .. "|r" end
     return line
 end
-local forgeData = { items = {}, order = {}, tier = 0, tierName = "", money = 0, runes = {}, mats = {}, }
-local forgeMode = "gear"   -- or "craft" (0.41)
+local forgeData = { items = {}, order = {}, tier = 0, tierName = "", money = 0, runes = {}, orbs = {} }
 local pendingForge = nil
 local forgeOffset, forgeSelected = 0, nil
 
@@ -4282,34 +4295,26 @@ forgeDrag:SetScript("OnDragStop", function() forge:StopMovingOrSizing() end)
 local forgeTitle = forge:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 forgeTitle:SetPoint("TOP", 0, -16)
 forgeTitle:SetText("The Forge")
-
 local forgeClose = CreateFrame("Button", nil, forge, "UIPanelCloseButton")
 forgeClose:SetPoint("TOPRIGHT", -6, -6)
 
--- Gear | Crafting
-local function ForgeTab(text, x)
-    local b = CreateFrame("Button", nil, forge, "UIPanelButtonTemplate")
-    Size(b, 104, 22)
-    b:SetPoint("TOPLEFT", x, -34)
-    b:SetText(text)
-    return b
-end
-local gearTab = ForgeTab("Gear", 18)
-forge.craftTab = ForgeTab("Crafting", 126)   -- 0.50: the Power Codex is gone
-
 local forgeTier = forge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-forgeTier:SetPoint("LEFT", forge.craftTab, "RIGHT", 12, 0)
-forgeTier:SetPoint("RIGHT", forge, "RIGHT", -22, 0)
+forgeTier:SetPoint("TOPLEFT", 22, -40)
+forgeTier:SetPoint("TOPRIGHT", -22, -40)
 forgeTier:SetJustifyH("LEFT")
-
 local forgeMoney = forge:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 forgeMoney:SetPoint("BOTTOMLEFT", 24, 22)
-local forgeMats = forge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-forgeMats:SetPoint("BOTTOMLEFT", forgeMoney, "TOPLEFT", 0, 6)
-forgeMats:SetWidth(670)
-forgeMats:SetJustifyH("LEFT")
 
--- the list
+-- rarities (0.51): Normal, Magic, Rare, and a unique
+local RARITY = {
+    [0] = { name = "Normal", c = { 1, 1, 1 }, hex = "ffffff" },
+    [1] = { name = "Magic", c = { 0.53, 0.53, 1 }, hex = "8888ff" },
+    [2] = { name = "Rare", c = { 1, 1, 0.47 }, hex = "ffff77" },
+    [3] = { name = "Unique", c = { 1, 0.5, 0 }, hex = "ff8000" },
+}
+WT.RARITY = RARITY
+
+-- ---------------- the list ----------------
 local list = CreateFrame("Frame", nil, forge)
 list:SetPoint("TOPLEFT", 18, -60)
 Size(list, 320, ROWS * ROW_H)
@@ -4349,7 +4354,7 @@ list:SetScript("OnMouseWheel", function(self, delta)
     RefreshForge()
 end)
 
--- the detail panel
+-- ---------------- the chosen item ----------------
 local detail = CreateFrame("Frame", nil, forge)
 detail:SetPoint("TOPLEFT", list, "TOPRIGHT", 16, 0)
 Size(detail, 350, ROWS * ROW_H)
@@ -4361,7 +4366,6 @@ dIcon.tex = dIcon:CreateTexture(nil, "ARTWORK")
 dIcon.tex:SetAllPoints()
 dIcon:SetScript("OnEnter", function(self) local it = forgeData.items[forgeSelected or ""] if it then ItemTooltip(self, it) end end)
 dIcon:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
 local dName = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 dName:SetPoint("TOPLEFT", dIcon, "TOPRIGHT", 8, -2)
 dName:SetWidth(300)
@@ -4370,142 +4374,82 @@ local dInfo = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 dInfo:SetPoint("TOPLEFT", dName, "BOTTOMLEFT", 0, -4)
 dInfo:SetWidth(300)
 dInfo:SetJustifyH("LEFT")
-
-local affixHeader = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-affixHeader:SetPoint("TOPLEFT", dIcon, "BOTTOMLEFT", 0, -16)
-affixHeader:SetText("Affixes")
-
-local affixRows = {}
-for i = 1, 4 do
-    local a = CreateFrame("Frame", nil, detail)
-    Size(a, 350, 38)
-    a:SetPoint("TOPLEFT", affixHeader, "BOTTOMLEFT", 0, -6 - (i - 1) * 40)
-    a.text = a:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    a.text:SetPoint("TOPLEFT", 0, 0)
-    a.text:SetWidth(260)
-    a.text:SetJustifyH("LEFT")
-    a.button = CreateFrame("Button", nil, a, "UIPanelButtonTemplate")
-    Size(a.button, 80, 20)
-    a.button:SetPoint("TOPRIGHT", 0, 2)
-    a.button:SetText("Reroll")
-    a.cost = a:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    a.cost:SetPoint("TOP", a.button, "BOTTOM", 0, -2)
-    affixRows[i] = a
-end
-local noAffix = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-noAffix:SetPoint("TOPLEFT", affixHeader, "BOTTOMLEFT", 0, -6)
-noAffix:SetWidth(340)
-noAffix:SetJustifyH("LEFT")
+local dAffixes = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+dAffixes:SetPoint("TOPLEFT", dIcon, "BOTTOMLEFT", 0, -10)
+dAffixes:SetWidth(346)
+dAffixes:SetHeight(128)
+dAffixes:SetJustifyH("LEFT")
+dAffixes:SetJustifyV("TOP")
 
 -- the rune socket
 local runeText = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-runeText:SetPoint("BOTTOMLEFT", 0, 96)
+runeText:SetPoint("TOPLEFT", 0, -186)
 runeText:SetWidth(250)
 runeText:SetJustifyH("LEFT")
 local runeButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
 Size(runeButton, 86, 20)
-runeButton:SetPoint("BOTTOMRIGHT", -8, 94)
+runeButton:SetPoint("TOPRIGHT", -4, -182)
 runeButton:SetText("Forge rune")
 local runeMenu = CreateFrame("Frame", "WorldTiersRuneMenu", UIParent, "UIDropDownMenuTemplate")
 
-local reforgeButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
-Size(reforgeButton, 340, 26)
-reforgeButton:SetPoint("BOTTOMLEFT", 0, 34)
-local reforgeNeed = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-reforgeNeed:SetPoint("BOTTOMLEFT", reforgeButton, "TOPLEFT", 0, 3)
-reforgeNeed:SetWidth(340)
-reforgeNeed:SetJustifyH("LEFT")
-local rerollButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
-Size(rerollButton, 340, 26)
-rerollButton:SetPoint("BOTTOMLEFT", 0, 0)
-
--- ---------------- the Crafting panel (0.41): orbs on the chosen item ----------------
-do
+-- ---------------- the orbs ----------------
+-- index: the server's (WorldTiers.h CraftOrb); works: which rarities it works on (3: a unique)
 local ORBS = {
-    { name = "Orb of Transmutation", icon = "INV_Misc_Orb_02", text = "An item with no affixes gets one (common or uncommon)." },
-    { name = "Orb of Alteration", icon = "INV_Elemental_Mote_Mana", text = "Each affix rerolled into another of its rarity and side (prefix or suffix), at a new tier." },
-    { name = "Orb of Augmentation", icon = "INV_Elemental_Mote_Water01", text = "One more common or uncommon affix, if the item has room." },
-    { name = "Chaos Orb", icon = "INV_Elemental_Mote_Nether", text = "Every affix rerolled: new affixes, and a new number of them." },
-    { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", text = "One more affix of any rarity (a rare one from World Tier VI), if the item has room." },
-    { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", text = "One affix, at random, taken off." },
-    { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", text = "Every affix taken off." },
-    { name = "Divine Orb", icon = "INV_Enchant_AbyssCrystal", text = "The size of every affix rerolled within its tier (70-100%). On a unique: its numbers rerolled (the only orb that works on one)." },
+    [1] = { name = "Orb of Transmutation", icon = "INV_Misc_Orb_02", works = { [0] = true }, text = "Normal to Magic: 1 or 2 affixes." },
+    [2] = { name = "Orb of Alteration", icon = "INV_Elemental_Mote_Mana", works = { [1] = true }, text = "A Magic item's affixes, rolled again." },
+    [3] = { name = "Orb of Augmentation", icon = "INV_Elemental_Mote_Water01", works = { [1] = true }, text = "One more affix on a Magic item with room (a prefix and a suffix at most)." },
+    [4] = { name = "Chaos Orb", icon = "INV_Elemental_Mote_Nether", works = { [2] = true }, text = "A Rare item's affixes, rolled again: 4 to 6 new ones." },
+    [5] = { name = "Exalted Orb", icon = "INV_Misc_RunedOrb_01", works = { [2] = true }, text = "One more affix on a Rare item with room (sometimes a rare one, from World Tier VI)." },
+    [6] = { name = "Orb of Annulment", icon = "INV_Elemental_Mote_Shadow01", works = { [1] = true, [2] = true }, text = "One affix, at random, taken off." },
+    [7] = { name = "Orb of Scouring", icon = "INV_Misc_Orb_03", works = { [1] = true, [2] = true }, text = "Every affix taken off: the item is Normal again." },
+    [8] = { name = "Divine Orb", icon = "INV_Enchant_AbyssCrystal", works = { [1] = true, [2] = true, [3] = true }, text = "Every affix's size rolled again within its tier (70-100%). The only orb for a unique: its numbers again." },
+    [9] = { name = "Orb of Regret", icon = "INV_Elemental_Mote_Shadow01", works = {}, text = "For the passive tree (/passive): right-click a node there." },
+    [10] = { name = "Orb of Alchemy", icon = "INV_Misc_Orb_05", works = { [0] = true }, text = "Normal to Rare: 4 to 6 affixes." },
+    [11] = { name = "Regal Orb", icon = "INV_Misc_Gem_Pearl_09", works = { [1] = true }, text = "Magic to Rare: its affixes stay, one more is added." },
 }
 WT.ORB_NAMES = {}
-for i, o in ipairs(ORBS) do WT.ORB_NAMES[i] = o.name end
-local craft = CreateFrame("Frame", nil, forge)
-forge.craft = craft
-craft:SetPoint("TOPLEFT", list, "TOPRIGHT", 16, 0)
-Size(craft, 350, ROWS * ROW_H)
-craft:Hide()
-local cName = craft:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-cName:SetPoint("TOPLEFT", 0, -2)
-cName:SetWidth(346)
-cName:SetJustifyH("LEFT")
-local cAffixes = craft:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-cAffixes:SetPoint("TOPLEFT", cName, "BOTTOMLEFT", 0, -6)
-cAffixes:SetWidth(346)
-cAffixes:SetJustifyH("LEFT")
-local cHelp = craft:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-cHelp:SetPoint("BOTTOMLEFT", 0, 0)
-cHelp:SetWidth(346)
-cHelp:SetJustifyH("LEFT")
-cHelp:SetText("Choose an item on the left, then click an orb to use it. Orbs drop from creatures: more from elites, Champions and bosses. "
-    .. "Uncommon items carry up to 2 affixes, rare 3, epic and better 4. Class uniques and set powers are never touched.")
+for i, o in pairs(ORBS) do WT.ORB_NAMES[i] = o.name end
+-- the order on the bench: as you would use them
+local ORB_ORDER = { 1, 10, 3, 2, 11, 4, 5, 6, 7, 8 }
+local orbHeader = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+orbHeader:SetPoint("TOPLEFT", 0, -214)
+orbHeader:SetText("Orbs")
 local orbButtons = {}
-for i, o in ipairs(ORBS) do
-    local b = CreateFrame("Button", nil, craft)
-    Size(b, 168, 40)
-    b:SetPoint("TOPLEFT", ((i - 1) % 2) * 176, -150 - math.floor((i - 1) / 2) * 46)
+for n, i in ipairs(ORB_ORDER) do
+    local o = ORBS[i]
+    local b = CreateFrame("Button", nil, detail)
+    Size(b, 170, 34)
+    b:SetPoint("TOPLEFT", ((n - 1) % 2) * 176, -232 - math.floor((n - 1) / 2) * 36)
     b.icon = b:CreateTexture(nil, "ARTWORK")
-    Size(b.icon, 36, 36)
+    Size(b.icon, 30, 30)
     b.icon:SetPoint("LEFT", 2, 0)
     b.icon:SetTexture("Interface\\Icons\\" .. o.icon)
     b.name = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    b.name:SetPoint("TOPLEFT", b.icon, "TOPRIGHT", 6, -2)
-    b.name:SetWidth(122)
+    b.name:SetPoint("TOPLEFT", b.icon, "TOPRIGHT", 6, -1)
+    b.name:SetWidth(128)
     b.name:SetJustifyH("LEFT")
     b.name:SetText(o.name)
     b.count = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.count:SetPoint("BOTTOMLEFT", b.icon, "BOTTOMRIGHT", 6, 2)
+    b.count:SetPoint("BOTTOMLEFT", b.icon, "BOTTOMRIGHT", 6, 1)
     b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     b.orb = i
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine(o.name, 1, 0.82, 0)
         GameTooltip:AddLine(o.text, 1, 1, 1, true)
-        GameTooltip:AddLine(string.format("You have %d.", (forgeData.orbs or {})[i] or 0), 0.5, 0.8, 1)
+        GameTooltip:AddLine(string.format("You have %d.", forgeData.orbs[i] or 0), 0.5, 0.8, 1)
+        if self.why then GameTooltip:AddLine(self.why, 1, 0.3, 0.3, true) end
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     b:SetScript("OnClick", function(self)
         local it = forgeData.items[forgeSelected or ""]
         if not it then UIErrorsFrame:AddMessage("Choose an item on the left first.", 1, 0.2, 0.2) return end
-        if ((forgeData.orbs or {})[self.orb] or 0) < 1 then UIErrorsFrame:AddMessage("You have none of those.", 1, 0.2, 0.2) return end
+        if (forgeData.orbs[self.orb] or 0) < 1 then UIErrorsFrame:AddMessage("You have none of those.", 1, 0.2, 0.2) return end
+        PlaySound("igMainMenuOptionCheckBoxOn")
         Send(string.format("FC:%d:%d:%d", self.orb, it.bag, it.slot))
     end)
-    orbButtons[i] = b
-end
-
-forge.RefreshCraft = function(it)
-    if not it then
-        cName:SetText("|cff888888Choose an item on the left.|r")
-        cAffixes:SetText("")
-    else
-        cName:SetText((ItemLink(it) or "?"):gsub("[%[%]]", ""))
-        local lines = {}
-        for _, a in ipairs(it.affixes) do
-            local c = ({ [0] = "ffffff", [1] = "1eff00", [2] = "a335ee" })[a.rarity] or "ff8000"
-            lines[#lines + 1] = "|cff" .. c .. a.text .. "|r"
-        end
-        cAffixes:SetText(#lines > 0 and table.concat(lines, "\n") or "|cff888888No affixes.|r")
-    end
-    for i, b in ipairs(orbButtons) do
-        local n = (forgeData.orbs or {})[i] or 0
-        b.count:SetText(n > 0 and ("|cffffffff" .. n .. "|r") or "|cff8888880|r")
-        b.icon:SetDesaturated(n < 1)
-    end
-end
+    orbButtons[n] = b
 end
 
 StaticPopupDialogs["WORLDTIERS_FORGE"] = {
@@ -4521,20 +4465,15 @@ end
 
 local function ItemName(it)
     local link = ItemLink(it)
-    return link and link:gsub("[%[%]]", "") or "?"
+    return link and (link:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h", ""):gsub("|h", ""):gsub("[%[%]]", "")) or "?"
 end
+local function Rar(it) return RARITY[it.rarity] or RARITY[0] end
+WT.ForgeItemName = ItemName
 
 RefreshForge = function()
-    forgeTier:SetText(string.format("World Tier |cffff9933%s|r. A piece reforges up to 3 tiers above where it dropped.", forgeData.tierName))
-    gearTab:UnlockHighlight() forge.craftTab:UnlockHighlight()
-    if forgeMode == "craft" then forge.craftTab:LockHighlight() else gearTab:LockHighlight() end
+    forgeTier:SetText(string.format("|cffff9933%s|r. An item keeps the level it dropped with: better ones come from higher tiers. "
+        .. "Craft them here with orbs.", forgeData.tierName))
     forgeMoney:SetText(WT.MoneyLine())
-    local mats = {}
-    for _, m in ipairs(forgeData.mats) do
-        mats[#mats + 1] = string.format("|cffa335ee%s|r %d%s", m.band, m.essence, m.shards > 0 and string.format(" (+%d shards)", m.shards) or "")
-    end
-    forgeMats:SetText(#mats > 0 and ("Essence: " .. table.concat(mats, ",  ")) or "|cff888888No Essence yet: bosses at World Tier I and up drop it (raids Essence, dungeons Shards).|r")
-    list:Show()
     local order = forgeData.order
     if not forgeSelected or not forgeData.items[forgeSelected] then forgeSelected = order[1] end
     for i = 1, ROWS do
@@ -4542,14 +4481,13 @@ RefreshForge = function()
         local key = order[forgeOffset + i]
         local it = key and forgeData.items[key]
         if it then
+            local rar = Rar(it)
             r.key = key
             r.icon:SetTexture(ItemIcon(it) or "Interface\\Icons\\INV_Misc_QuestionMark")
             r.name:SetText(ItemName(it))
-            local where = it.bag == -2 and "worn" or "bag"
-            r.sub:SetText(string.format("%s%s - item level %d - %d affix%s%s", "",
-                it.tier > 0 and ("Tier " .. it.tier) or "no tier", it.eff, #it.affixes, #it.affixes == 1 and "" or "es",
-                it.target > it.tier and (it.canPay and "  |cff20ff20(can reforge)|r" or "  |cffaaaaaa(reforge: need Essence)|r") or "")
-                .. "  |cff888888" .. where .. "|r")
+            r.name:SetTextColor(rar.c[1], rar.c[2], rar.c[3])
+            r.sub:SetText(string.format("%s - item level %d - %d affix%s  |cff888888%s|r", rar.name, it.eff, #it.affixes,
+                #it.affixes == 1 and "" or "es", it.bag == -2 and "worn" or "bag"))
             if key == forgeSelected then r.sel:Show() else r.sel:Hide() end
             r:Show()
         else
@@ -4558,28 +4496,30 @@ RefreshForge = function()
     end
 
     local it = forgeData.items[forgeSelected or ""]
-    if forgeMode == "craft" then
-        detail:Hide()
-        forge.craft:Show()
-        forge.RefreshCraft(it)
-        return
-    end
-    forge.craft:Hide()
     if not it then
         detail:Hide()
         return
     end
     detail:Show()
+    local rar = Rar(it)
     dIcon.tex:SetTexture(ItemIcon(it) or "Interface\\Icons\\INV_Misc_QuestionMark")
     dName:SetText(ItemName(it))
-    dInfo:SetText(string.format("%s%s\nItem level %d for you (its own is %d)%s", "",
-        it.tier > 0 and ("Tier " .. it.tier) or "Not from a World Tier", it.eff, it.own,
-        it.origin > 0 and string.format("\n|cff888888Dropped at Tier %d: reforges up to Tier %d|r", it.origin, it.origin + 3) or ""))
+    dName:SetTextColor(rar.c[1], rar.c[2], rar.c[3])
+    dInfo:SetText(string.format("|cff%s%s|r - item level %d%s", rar.hex, rar.name, it.eff,
+        it.origin > 0 and string.format(" - dropped at Tier %d", it.origin) or ""))
+    local lines = {}
+    for _, a in ipairs(it.affixes) do
+        local c = WT.AFFIX_COLOR[a.rarity] or WT.AFFIX_COLOR[0]
+        lines[#lines + 1] = string.format("|cff%02x%02x%02x%s|r", c[1] * 255, c[2] * 255, c[3] * 255, a.text)
+    end
+    dAffixes:SetText(#lines > 0 and table.concat(lines, "\n")
+        or (it.rarity == 0 and "|cff888888Normal: no affixes. An Orb of Transmutation makes it Magic, an Orb of Alchemy Rare.|r"
+            or "|cff888888No affixes.|r"))
 
     -- the rune socket
     local runeName = it.rune > 0 and (WT.RUNE_NAMES[it.rune] or ("Rune " .. it.rune)) or nil
     runeText:SetText(runeName and ("|cff40e0d0" .. runeName .. "|r") or "|cff888888No rune|r")
-    if #forgeData.runes > 0 and it.rerollAll > 0 then
+    if #forgeData.runes > 0 and it.rarity ~= 3 then
         runeButton:Enable()
         runeButton:SetScript("OnClick", function(self)
             local menu = { { text = "Forge a rune into " .. ItemName(it), isTitle = true, notCheckable = true } }
@@ -4596,67 +4536,19 @@ RefreshForge = function()
         runeButton:Disable()
     end
 
-    -- the unique power has its own row below
-    local shown = {}
-    for idx, a in ipairs(it.affixes) do
-        if a.rarity ~= 6 then shown[#shown + 1] = { a = a, idx = idx - 1 } end
-    end
-    for i = 1, 4 do
-        local row, a, idx = affixRows[i], shown[i] and shown[i].a, shown[i] and shown[i].idx
-        if a then
-            local c = WT.AFFIX_COLOR[a.rarity] or WT.AFFIX_COLOR[0]
-            row.text:SetText(a.text)
-            row.text:SetTextColor(c[1], c[2], c[3])
-            row.cost:SetText(Money(it.rerollOne))
-            row.button:SetScript("OnClick", function()
-                Confirm(string.format("Reroll \"%s\" on %s for %s?\n\nIt becomes another affix of the same kind.", a.text, ItemName(it), Money(it.rerollOne)),
-                    string.format("F1:%d:%d:%d", it.bag, it.slot, idx))
-            end)
-            if it.rerollOne > 0 and a.rarity ~= 6 and a.rarity ~= 10 then row.button:Enable() else row.button:Disable() end
-            if a.rarity == 6 or a.rarity == 10 then row.cost:SetText("|cffe6cc80unique|r") end
-            row:Show()
-        else
-            row:Hide()
-        end
-    end
-
-    if #shown == 0 then
-        noAffix:SetText(it.rerollAll > 0 and "No affixes yet. Roll some below." or "Only uncommon (green) or better gear carries affixes.")
-        noAffix:Show()
-    else
-        noAffix:Hide()
-    end
-
-    if it.target > it.tier then
-        reforgeButton:SetText(string.format("Reforge to Tier %d - %s", it.target, Money(it.reforge)))
-        reforgeNeed:SetText((it.canPay and "|cff20ff20Costs|r " or "|cffff4040Needs|r ") .. it.mats)
-        if it.canPay then reforgeButton:Enable() else reforgeButton:Disable() end
-        reforgeButton:SetScript("OnClick", function()
-            Confirm(string.format("Reforge %s to Tier %d for %s and %s?\n\nIts stats grow to that tier. Its affixes stay as they are.", ItemName(it), it.target, it.mats, Money(it.reforge)),
-                string.format("FR:%d:%d", it.bag, it.slot))
-        end)
-    else
-        reforgeNeed:SetText("")
-        reforgeButton:SetText(forgeData.tier == 0 and "Choose a World Tier to reforge to"
-            or (it.tier >= forgeData.tier and "Already at your World Tier" or "As high as it goes (3 tiers above where it dropped)"))
-        reforgeButton:Disable()
-    end
-    if it.rerollAll > 0 then
-        local verb = #it.affixes > 0 and "Reroll all affixes" or "Roll affixes"
-        rerollButton:SetText(string.format("%s - %s", verb, Money(it.rerollAll)))
-        rerollButton:Enable()
-        rerollButton:SetScript("OnClick", function()
-            Confirm(string.format("%s on %s for %s?\n\nEvery affix is replaced, and how many it gets is rolled again.", verb, ItemName(it), Money(it.rerollAll)),
-                string.format("FA:%d:%d", it.bag, it.slot))
-        end)
-    else
-        rerollButton:SetText("No affixes on this kind of item")
-        rerollButton:Disable()
+    -- the orbs: lit when you have one and it works on this item
+    for _, b in ipairs(orbButtons) do
+        local o, have = ORBS[b.orb], forgeData.orbs[b.orb] or 0
+        local works = o.works[it.rarity] and true or false
+        b.why = (not works) and ("Not on a " .. rar.name .. " item.") or nil
+        b.count:SetText(have > 0 and ("|cffffffff" .. have .. "|r") or "|cff8888880|r")
+        b.icon:SetDesaturated(have < 1 or not works)
+        b:SetAlpha((have > 0 and works) and 1 or 0.5)
     end
 end
 
--- FB|money|reserve  FI|bag|slot|tier|eff|own|reforge|rerollAll|rerollOne|n|target|materials|canPay|rune|primal|origin
--- FX|bag|slot|i|rarity|text  FN|rune|count|name|text  FM|band|essence|shards  FE|tier|name  FO|
+-- FB|money|reserve  FI|bag|slot|tier|eff|own|rarity|affixes|rune|origin (0.51)
+-- FX|bag|slot|i|rarity|text  FN|rune|count|name|text  FC|orbs  FE|tier|name  FO|
 WT.RUNE_NAMES = { "Rune of Ferocity", "Rune of the Bulwark", "Rune of Life", "Rune of the Leech", "Rune of Fortune",
                   "Rune of Echoes", "Rune of Wrath", "Rune of Warding" }
 function WT.OnForgeMessage(msg)
@@ -4672,21 +4564,20 @@ function WT.OnForgeMessage(msg)
         forge:Show()
     elseif cmd == "FB" then
         local f = Split(rest, "|")
-        pendingForge = { items = {}, order = {}, money = tonumber(f[1]) or 0, runes = {}, mats = {}, }
+        pendingForge = { items = {}, order = {}, money = tonumber(f[1]) or 0, runes = {}, orbs = {} }
         if f[2] then WT.SetReserve(f[2]) end
     elseif cmd == "FI" and pendingForge then
         local f = Split(rest, "|")
         local it = { bag = tonumber(f[1]), slot = tonumber(f[2]), tier = tonumber(f[3]) or 0, eff = tonumber(f[4]) or 0, own = tonumber(f[5]) or 0,
-                     reforge = tonumber(f[6]) or 0, rerollAll = tonumber(f[7]) or 0, rerollOne = tonumber(f[8]) or 0, affixes = {},
-                     target = tonumber(f[10]) or 0, mats = f[11] or "", canPay = f[12] == "1", rune = tonumber(f[13]) or 0,
-                     origin = tonumber(f[15]) or 0 }
+                     rarity = tonumber(f[6]) or 0, affixes = {}, rune = tonumber(f[8]) or 0, origin = tonumber(f[9]) or 0 }
         local key = f[1] .. ":" .. f[2]
         pendingForge.items[key] = it
         pendingForge.order[#pendingForge.order + 1] = key
     elseif cmd == "FX" and pendingForge then
-        local f = Split(rest, "|")
-        local it = pendingForge.items[f[1] .. ":" .. f[2]]
-        if it then table.insert(it.affixes, { rarity = tonumber(f[4]) or 0, text = f[5] or "" }) end
+        -- the text is everything after the rarity (it holds colour codes)
+        local bag, slot, rarity, text = rest:match("^([^|]*)|([^|]*)|[^|]*|(%d+)|(.*)$")
+        local it = bag and pendingForge.items[bag .. ":" .. slot]
+        if it then table.insert(it.affixes, { rarity = tonumber(rarity) or 0, text = text or "" }) end
     elseif cmd == "FN" and pendingForge then
         local f = Split(rest, "|")
         local id = tonumber(f[1]) or 0
@@ -4695,9 +4586,6 @@ function WT.OnForgeMessage(msg)
     elseif cmd == "FC" and pendingForge then
         pendingForge.orbs = {}
         for n in (rest .. ","):gmatch("([^,]*),") do pendingForge.orbs[#pendingForge.orbs + 1] = tonumber(n) or 0 end
-    elseif cmd == "FM" and pendingForge then
-        local f = Split(rest, "|")
-        table.insert(pendingForge.mats, { band = f[1] or "", essence = tonumber(f[2]) or 0, shards = tonumber(f[3]) or 0 })
     elseif cmd == "FE" and pendingForge then
         local f = Split(rest, "|")
         pendingForge.tier, pendingForge.tierName = tonumber(f[1]) or 0, f[2] or ""
@@ -4709,9 +4597,6 @@ function WT.OnForgeMessage(msg)
     end
     return true
 end
-
-gearTab:SetScript("OnClick", function() forgeMode = "gear" RefreshForge() end)
-forge.craftTab:SetScript("OnClick", function() forgeMode = "craft" RefreshForge() end)
 
 forge:SetScript("OnShow", function()
     PlaySound("igCharacterInfoOpen")
@@ -6588,7 +6473,7 @@ end
 do
     local HF_TIERS, HF_PARAGON, HF_GEAR, HF_KEY, HF_KEYPORT, HF_TRANSMOG, HF_POUCH, HF_SIGNATURE, HF_PARAGON_LIVE =
         1, 2, 4, 8, 16, 32, 64, 128, 256
-    local hub = { h = {}, key = {}, ports = {}, reforge = { 0, "" }, building = false,
+    local hub = { h = {}, key = {}, ports = {}, building = false,
         events = {} }
     local function Flag(bit) return math.floor((hub.h.flags or 0) / bit) % 2 == 1 end
 
@@ -6839,24 +6724,15 @@ do
     local forgeT = Tile(2, "Trade_BlackSmithing", "The Forge", function() win:Hide() Send("WF") end)
     local transmogT = Tile(3, "INV_Arcane_Orb", "Transmogrify", function() win:Hide() Send("WX") end)
     local pouchT = Tile(4, "INV_Misc_Bag_10", "Materials Pouch", function() win:Hide() Send("WM") end)
-    local reforgeT = Tile(5, "INV_Hammer_20", "Quick Reforge", function()
-        StaticPopup_Show("WORLDTIERS_HUB_REFORGE", tostring(hub.reforge[1]), hub.reforge[2])
-    end)
+    -- 0.51: no reforging; the passive tree has the tile (and its free points)
+    local treeT = Tile(5, "Spell_Holy_EmpowerChampion", "Passive Tree", function() win:Hide() if WT.OpenPassive then WT.OpenPassive() end end)
     local reportT = Tile(6, "INV_Misc_Note_01", "Gear Report", function() Send("WI") end)
     transmogT.sub:SetText("Free, account-wide looks")
     pouchT.sub:SetText("Every crafting material")
-    forgeT.sub:SetText("Reforge, reroll affixes")
+    forgeT.sub:SetText("Craft with orbs, runes")
     reportT.sub:SetText("Item levels, in chat")
     TipOn(paragonT, function() return "Auto-Sell", "Choose what sells itself the moment you loot it. Sold items stay in buyback. Also /autosell." end)
-    TipOn(reforgeT, function()
-        if hub.reforge[1] > 0 then return "Quick Reforge", "Bring every piece you wear up to your current tier, paying Essence from bosses at that tier as well as gold." end
-        return "Quick Reforge", "Everything you wear is already at your tier, or as high as it can go."
-    end)
-
-    StaticPopupDialogs["WORLDTIERS_HUB_REFORGE"] = {
-        text = "Reforge %s equipped pieces to your tier for %s, plus Essence?", button1 = ACCEPT or "Accept", button2 = CANCEL,
-        OnAccept = function() Send("WR") end, timeout = 0, whileDead = 1, hideOnEscape = 1,
-    }
+    TipOn(treeT, function() return "Passive Tree", "Spend your passive points: stats, notables, keystones, jewel sockets. Also N, or /passive." end)
 
     -- ======================= Experience rate (0.33) =======================
     -- levelling only: from Off up to the server's own rate; Paragon is never touched
@@ -7065,7 +6941,7 @@ do
         local about = Text(aboutS, "GameFontHighlightSmall", 14, -40, 750)
         about:SetText("Every hour a new zone and a new dungeon are empowered for each band of ten levels: these are the ones for "
             .. "your level. Go there for faster levelling, more Champions and Treasure Goblins, extra boss loot, and a reward chest "
-            .. "(gear, gold, and Essence from World Tier I). Each chest once an hour. Queue for the dungeon in the Dungeon Finder, "
+            .. "(gear, gold, and orbs from World Tier I). Each chest once an hour. Queue for the dungeon in the Dungeon Finder, "
             .. "or walk in.")
 
         hub.RefreshEvents = function()
@@ -7097,7 +6973,7 @@ do
                 zb.bar:SetMinMaxValues(0, math.max(1, e.goal or 1))
                 zb.bar:SetValue(math.min(e.kills or 0, e.goal or 1))
                 zb.bar.text:SetText(e.zoneDone and "Reward chest claimed this hour" or string.format("%d / %d kills", e.kills or 0, e.goal or 0))
-                zb.reward:SetText(e.zoneDone and "Come back next hour for the next zone." or "Reward chest at the goal: gear, gold and Essence.")
+                zb.reward:SetText(e.zoneDone and "Come back next hour for the next zone." or "Reward chest at the goal: gear, gold and orbs.")
                 zb.bar:Show()
             else
                 zb.name:SetText("No zone right now")
@@ -7151,15 +7027,18 @@ do
                 .. "- You can change tier any time out of combat, down as well as up.\n"
                 .. "- Below level 80 you can reach Tier II; past that opens at the level cap." },
             { "Gear and the Forge", G .. "Gear, affixes and the Forge" .. E .. "\n\n"
-                .. "- Gear is stamped with the tier it was earned at, and grows with it. Your tooltip shows the item level it counts as.\n"
-                .. "- Dropped gear rolls " .. W .. "affixes" .. E .. " (prefixes and suffixes, tier T1 the best), and its base has a built-in "
+                .. "- Gear has the item level it " .. W .. "dropped" .. E .. " with, for good: +item levels for each World Tier. Better gear comes from higher tiers.\n"
+                .. "- " .. W .. "Rarity" .. E .. ", as in Path of Exile: white items are " .. W .. "Normal" .. E .. " (no affixes), green |cff8888ffMagic|r (1-2), "
+                .. "blue and better |cffffff77Rare|r (4-6). The tooltip's name shows it.\n"
+                .. "- Affixes are prefixes and suffixes, tier T1 the best; a base has a built-in "
                 .. W .. "implicit" .. E .. " line. The best bases (" .. W .. "Superior" .. E .. " and " .. W .. "Elite" .. E .. ") drop at the high tiers.\n"
                 .. "- Gear and skill gems need " .. W .. "attributes" .. E .. " (Strength, Agility, Intellect): without them an item gives no affixes.\n"
                 .. "- " .. W .. "Uniques" .. E .. " (orange) have fixed lines; only their numbers roll, and a " .. W .. "Divine Orb" .. E .. " rerolls them. "
                 .. "A few chase uniques are very rare. A unique you find announces itself and glows in your bags.\n"
                 .. "- " .. W .. "Jewels" .. E .. " go in the passive tree's jewel sockets.\n"
-                .. "- The " .. W .. "Forge" .. E .. " (/forge) reforges a piece up to your current tier and uses crafting orbs on it. "
-                .. "It costs gold, Essence and Shards.\n"
+                .. "- The " .. W .. "Forge" .. E .. " (/forge) is where you use " .. W .. "orbs" .. E .. ": Transmutation and Alchemy make Normal items "
+                .. "Magic and Rare, Alteration and Chaos reroll them, Augmentation, Regal and Exalted add affixes, Annulment and Scouring take them off. "
+                .. "Orbs drop from creatures; bosses give them from World Tier I.\n"
                 .. "- " .. W .. "Runes" .. E .. " drop from bosses at higher tiers: forge one into a piece for a special effect.\n"
                 .. "- " .. W .. "Treasure Maps" .. E .. " drop from Champions, bosses, Tier Keys and Treasure Goblins. Use one to see "
                 .. "where it leads (a compass points the way), and again at the spot to dig. Better maps have guardians and "
@@ -7202,7 +7081,7 @@ do
                 .. "- " .. W .. "Champions" .. E .. " are bigger, stronger creatures with an affix (hover over one to see it). "
                 .. "They hit harder and drop gear for your level.\n"
                 .. "- " .. W .. "Treasure Goblins" .. E .. " appear at Tier I and up. Hit one and it runs: kill it within 15 seconds for gold, "
-                .. "Shards, runes and gear, or it escapes." },
+                .. "orbs, runes and gear, or it escapes." },
             { "Handy Tools", G .. "Handy tools" .. E .. " (in the General tab of your spellbook)\n\n"
                 .. "- " .. W .. "World Tiers" .. E .. ": this window, anywhere.\n"
                 .. "- " .. W .. "Materials Pouch" .. E .. " (/pouch): every crafting material for your whole account, no limit, no bag space. "
@@ -7370,7 +7249,7 @@ do
             TipOn(t, function() return label, tip end)
             return t
         end
-        local forgeL = Launcher("Forge", 84, "Trade_BlackSmithing", nil, "Opens the Forge: reforge and craft your gear. Also /forge.",
+        local forgeL = Launcher("Forge", 84, "Trade_BlackSmithing", nil, "Opens the Forge: craft your gear with orbs. Also /forge.",
             function() Send("WF") end)
         Launcher("Passive Tree", 118, "Spell_Holy_EmpowerChampion", forgeL, "Opens your passive tree. Also N, or /passive.",
             function() if WT.OpenPassive then WT.OpenPassive() end end)
@@ -7450,9 +7329,8 @@ do
         forgeT:SetOn(Flag(HF_GEAR))
         transmogT:SetOn(Flag(HF_TRANSMOG))
         pouchT:SetOn(Flag(HF_POUCH))
-        reforgeT:SetOn(Flag(HF_GEAR) and hub.reforge[1] > 0)
-        reforgeT.sub:SetText(hub.reforge[1] > 0 and string.format("%d piece%s, %s", hub.reforge[1], hub.reforge[1] == 1 and "" or "s", hub.reforge[2])
-            or "All at your tier")
+        treeT:SetOn(true)
+        treeT.sub:SetText(WT.PassiveSummary and WT.PassiveSummary() or "Your passive tree")
         reportT:SetOn(Flag(HF_GEAR))
 
 
@@ -7482,7 +7360,7 @@ do
 
     -- WW| WH| WK| WP| WR| WE| WZ| WC| WV| WL| (WS| WO|, the Signature Keystone, went in 0.50)
     function WT.OnHubMessage(msg)
-        local cmd = msg:match("^(W[WHKPREZCVL])|") or msg:match("^(E[ZDXWN])|")
+        local cmd = msg:match("^(W[WHKPEZCVL])|") or msg:match("^(E[ZDXWN])|")
         if not cmd then return false end
         local f = Split(msg:sub(4), "|")
         if cmd == "WW" then
@@ -7497,7 +7375,7 @@ do
                 nextIlvl = tonumber(f[10]) or 0, curHealth = f[11], curDamage = f[12], paragon = tonumber(f[13]) or 0,
                 free = tonumber(f[14]) or 0, respecGold = tonumber(f[15]) or 0, flags = tonumber(f[16]) or 0, level = tonumber(f[17]),
             }
-            hub.key, hub.reforge = {}, { 0, "" }
+            hub.key = {}
             hub.events = {}
         elseif cmd == "EZ" then
             local e = hub.events
@@ -7524,8 +7402,6 @@ do
             hub.key = { has = f[1] == "1", text = f[2], best = tonumber(f[3]) or 0, can = f[4] == "1", why = f[5] }
         elseif cmd == "WP" then
             hub.ports[#hub.ports + 1] = { map = tonumber(f[1]), name = f[2] or "", whose = f[3] or "" }
-        elseif cmd == "WR" then
-            hub.reforge = { tonumber(f[1]) or 0, f[2] or "" }
         elseif cmd == "WL" then
             -- WL|chosen|highest|at the cap
             hub.xp = { cur = tonumber(f[1]) or 0, max = math.max(1, tonumber(f[2]) or 1), on = true, atCap = f[3] == "1" }
