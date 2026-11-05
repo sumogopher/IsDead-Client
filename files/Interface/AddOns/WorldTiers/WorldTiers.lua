@@ -7043,6 +7043,15 @@ do
                 .. "- " .. W .. "Treasure Maps" .. E .. " drop from Champions, bosses, Tier Keys and Treasure Goblins. Use one to see "
                 .. "where it leads (a compass points the way), and again at the spot to dig. Better maps have guardians and "
                 .. "better chests; four Map Fragments make a Legendary Map." },
+            { "Defences and Flasks", G .. "Resistances, movement and flasks" .. E .. "\n\n"
+                .. "- " .. W .. "Resistances" .. E .. " are percentages, as in Path of Exile: Fire, Frost, Nature and Shadow, from gear affixes, "
+                .. "uniques, jewels and the tree. Each one cuts a creature's spells of that school; Arcane counts the average of the first three.\n"
+                .. "- " .. W .. "Every World Tier takes 4%" .. E .. " off each resistance (60% at most), and none counts above " .. W .. "75%" .. E .. ". "
+                .. "Below zero you take more damage. The character sheet's resistance icons show them.\n"
+                .. "- " .. W .. "Movement Speed" .. E .. " rolls on boots (every unique pair has some).\n"
+                .. "- " .. W .. "Flasks" .. E .. " sit on the flask bar: Life and Mana recover 35% over 3 sec, Quicksilver (level 10) is 40% faster movement, "
+                .. "Granite (20) 20% less physical damage, Bismuth (30) +25% elemental resistances. Kills fill them, bosses most. "
+                .. "Set their keys in Key Bindings (World Tiers); shift-drag moves the bar, /flasks hides it." },
             { "Passive Tree and Skills", G .. "Passive Tree, skills and gems" .. E .. "\n\n"
                 .. "- The " .. W .. "passive tree" .. E .. " (N, /passive, or the button at the top) is one huge board; each class starts in its "
                 .. "own place. You get a point every level, 2 at every fifth and 3 at every tenth: 130 by level 100.\n"
@@ -7657,6 +7666,219 @@ do
         text:SetText(cur > 0 and (cur >= 10000 and string.format("%.1fk", cur / 1000) or tostring(cur)) or "")
         bar:Show()
         return true
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Flasks and resistances (0.52), as in Path of Exile.
+--
+-- The flask bar: five flasks (Life, Mana, Quicksilver, Granite, Bismuth),
+-- each filled by kills and drunk with a click or its key (Key Bindings, World
+-- Tiers). The fill shows the charges, the sweep the time it still works.
+-- Shift-drag moves the bar. The server sends YF|locked|charges|max|perUse|
+-- msLeft (lists comma-separated) and YE|why.
+--
+-- Resistances: the character sheet's five resistance icons show the World
+-- Tiers percentages (RS|fire|frost|nature|shadow|arcane|cap|penalty|raw x4).
+-- ---------------------------------------------------------------------------
+
+do
+    local FLASK = {
+        { name = "Life Flask", icon = "Interface\\Icons\\INV_Potion_131", ms = 3000, level = 1,
+          text = "Recovers 35% of your maximum health over 3 sec." },
+        { name = "Mana Flask", icon = "Interface\\Icons\\INV_Potion_137", ms = 3000, level = 1,
+          text = "Recovers 35% of your maximum mana over 3 sec." },
+        { name = "Quicksilver Flask", icon = "Interface\\Icons\\Ability_Rogue_Sprint", ms = 4000, level = 10,
+          text = "40% increased Movement Speed for 4 sec." },
+        { name = "Granite Flask", icon = "Interface\\Icons\\Spell_Nature_StoneSkinTotem", ms = 5000, level = 20,
+          text = "You take 20% less Physical Damage for 5 sec." },
+        { name = "Bismuth Flask", icon = "Interface\\Icons\\Spell_Nature_ResistNature", ms = 5000, level = 30,
+          text = "+25% to all Elemental Resistances for 5 sec." },
+    }
+    WT.FLASKS = FLASK
+    local state = { locked = 0, charges = {}, max = {}, use = {}, left = {} }
+    WT.flaskState = state
+
+    local bar = CreateFrame("Frame", "WorldTiersFlasks", UIParent)
+    Size(bar, 5 * 40 - 4, 36)
+    bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 150)
+    bar:SetMovable(true)
+    bar:SetClampedToScreen(true)
+    bar:Hide()
+
+    local function Tip(self)
+        local d, i = FLASK[self.index], self.index
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine(d.name, 1, 0.82, 0)
+        GameTooltip:AddLine(d.text, 1, 1, 1, true)
+        if math.floor(state.locked / 2 ^ (i - 1)) % 2 == 1 then
+            GameTooltip:AddLine("Opens at level " .. d.level .. ".", 1, 0.3, 0.3)
+        else
+            GameTooltip:AddLine(string.format("%d / %d charges, %d per use", state.charges[i] or 0, state.max[i] or 0, state.use[i] or 0), 0.7, 0.7, 0.7)
+        end
+        GameTooltip:AddLine("Kills fill every flask: more for elites, magic and rare monsters, most for bosses.", 0.5, 0.5, 0.5, true)
+        local key = GetBindingKey("WORLDTIERS_FLASK" .. i)
+        GameTooltip:AddLine((key and ("Key: " .. key .. ".  ") or "") .. "Shift-drag to move the bar.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end
+
+    local buttons = {}
+    for i = 1, 5 do
+        local b = CreateFrame("Button", "WorldTiersFlask" .. i, bar)
+        Size(b, 36, 36)
+        b:SetPoint("LEFT", (i - 1) * 40, 0)
+        b.index = i
+        b:RegisterForClicks("LeftButtonUp")
+        b:RegisterForDrag("LeftButton")
+        local icon = b:CreateTexture(nil, "BACKGROUND")
+        icon:SetAllPoints()
+        icon:SetTexture(FLASK[i].icon)
+        b.icon = icon
+        local empty = b:CreateTexture(nil, "ARTWORK")   -- the empty part, from the top down
+        empty:SetPoint("TOPLEFT")
+        empty:SetPoint("TOPRIGHT")
+        empty:SetHeight(1)
+        empty:SetTexture(0, 0, 0, 0.65)
+        b.empty = empty
+        local border = b:CreateTexture(nil, "OVERLAY")
+        border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        border:SetPoint("CENTER")
+        Size(border, 62, 62)
+        local hl = b:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        hl:SetBlendMode("ADD")
+        local cd = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+        cd:SetAllPoints()
+        cd:SetReverse(true)
+        b.cd = cd
+        local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        count:SetPoint("BOTTOMRIGHT", -2, 2)
+        b.count = count
+        local hot = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
+        hot:SetPoint("TOPLEFT", 2, -2)
+        b.hot = hot
+        b:SetScript("OnClick", function(self) Send("Y" .. self.index) end)
+        b:SetScript("OnEnter", Tip)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        b:SetScript("OnDragStart", function() if IsShiftKeyDown() then bar:StartMoving() end end)
+        b:SetScript("OnDragStop", function()
+            bar:StopMovingOrSizing()
+            local p, _, rp, x, y = bar:GetPoint()
+            WorldTiersCharDB = WorldTiersCharDB or {}
+            WorldTiersCharDB.flaskPos = { p, rp, x, y }
+        end)
+        buttons[i] = b
+    end
+
+    local function Draw()
+        for i, b in ipairs(buttons) do
+            local locked = math.floor(state.locked / 2 ^ (i - 1)) % 2 == 1
+            local c, m, u = state.charges[i] or 0, state.max[i] or 1, state.use[i] or 1
+            b.icon:SetDesaturated(locked or c < u)
+            b.icon:SetVertexColor(locked and 0.4 or 1, locked and 0.4 or 1, locked and 0.4 or 1)
+            local frac = m > 0 and math.min(1, c / m) or 0
+            local h = math.floor(36 * (1 - frac) + 0.5)
+            if h <= 0 or locked then b.empty:Hide() else b.empty:SetHeight(h) b.empty:Show() end
+            b.count:SetText(locked and ("L" .. FLASK[i].level) or tostring(math.floor(c / u)))
+            local key = GetBindingKey("WORLDTIERS_FLASK" .. i)
+            b.hot:SetText(key and GetBindingText(key, "KEY_", 1) or "")
+        end
+    end
+    WT.DrawFlasks = Draw
+
+    local function Split(s)
+        local t = {}
+        for v in (s or ""):gmatch("[^,]+") do t[#t + 1] = tonumber(v) or 0 end
+        return t
+    end
+
+    function WT.OnFlaskMessage(msg)
+        local why = msg:match("^YE|(.*)$")
+        if why then UIErrorsFrame:AddMessage(why, 1, 0.2, 0.2) return true end
+        local locked, c, m, u, left = msg:match("^YF|(%d+)|([^|]*)|([^|]*)|([^|]*)|([^|]*)$")
+        if not locked then return false end
+        state.locked, state.charges, state.max, state.use, state.left = tonumber(locked) or 0, Split(c), Split(m), Split(u), Split(left)
+        local now = GetTime()
+        for i, b in ipairs(buttons) do
+            local ms = state.left[i] or 0
+            if ms > 0 then
+                local dur = FLASK[i].ms / 1000
+                b.cd:SetCooldown(now - (dur - ms / 1000), dur)
+            else
+                b.cd:SetCooldown(0, 0)
+            end
+        end
+        Draw()
+        if not (WorldTiersCharDB and WorldTiersCharDB.flasksHidden) then bar:Show() end
+        return true
+    end
+
+    function WT.DrinkFlask(i) Send("Y" .. i) end
+
+    -- Key Bindings (Bindings.xml)
+    BINDING_HEADER_WORLDTIERS = "World Tiers"
+    for i = 1, 5 do _G["BINDING_NAME_WORLDTIERS_FLASK" .. i] = "Flask " .. i .. ": " .. FLASK[i].name end
+
+    -- -----------------------------------------------------------------------
+    -- Resistances on the character sheet
+    -- -----------------------------------------------------------------------
+    local res = nil   -- { [frameId] = value }, cap, penalty, raw
+    -- the sheet's frame IDs: 2 fire, 3 nature, 4 frost, 5 shadow, 6 arcane
+    local ORDER = { [2] = 1, [4] = 2, [3] = 3, [5] = 4, [6] = 5 }
+    local NAMES = { "Fire", "Frost", "Nature", "Shadow", "Arcane" }
+
+    local function SheetResists()
+        if not res then return end
+        for i = 1, 5 do
+            local frame, text = _G["MagicResFrame" .. i], _G["MagicResText" .. i]
+            local k = frame and ORDER[frame:GetID()]
+            if k and text then
+                local v = res.v[k]
+                local col = v < 0 and "|cffff3333" or v >= res.cap and "|cff20ff20" or "|cffffffff"
+                text:SetText(col .. v .. "|r")
+                frame.tooltip = string.format("%s Resistance %d%%", NAMES[k], v)
+                if k <= 4 then
+                    frame.tooltipSubtext = string.format("You take %d%% %s %s damage. From gear: %+d%%; World Tier penalty: -%d%%; at most %d%%.",
+                        math.abs(v), v >= 0 and "less" or "more", NAMES[k]:lower(), res.raw[k] or 0, res.pen, res.cap)
+                else
+                    frame.tooltipSubtext = string.format("The average of your Fire, Frost and Nature Resistances: you take %d%% %s arcane damage.",
+                        math.abs(v), v >= 0 and "less" or "more")
+                end
+            end
+        end
+    end
+    if PaperDollFrame_SetResistances then hooksecurefunc("PaperDollFrame_SetResistances", SheetResists) end
+
+    function WT.OnResistMessage(msg)
+        local a = { msg:match("^RS|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%d+)|(%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$") }
+        if not a[1] then return false end
+        for i = 1, #a do a[i] = tonumber(a[i]) end
+        res = { v = { a[1], a[2], a[3], a[4], a[5] }, cap = a[6], pen = a[7], raw = { a[8], a[9], a[10], a[11] } }
+        WT.resists = res
+        if PaperDollFrame and PaperDollFrame:IsVisible() then SheetResists() end
+        return true
+    end
+
+    local ev = CreateFrame("Frame")
+    ev:RegisterEvent("PLAYER_ENTERING_WORLD")
+    ev:RegisterEvent("PLAYER_LEVEL_UP")
+    ev:RegisterEvent("UPDATE_BINDINGS")
+    ev:SetScript("OnEvent", function(self, event)
+        if event == "UPDATE_BINDINGS" then Draw() return end
+        local p = WorldTiersCharDB and WorldTiersCharDB.flaskPos
+        if event == "PLAYER_ENTERING_WORLD" and p then
+            bar:ClearAllPoints()
+            bar:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+        end
+        Send("Y")
+    end)
+
+    SLASH_WORLDTIERSFLASKS1 = "/flasks"
+    SlashCmdList["WORLDTIERSFLASKS"] = function()
+        WorldTiersCharDB = WorldTiersCharDB or {}
+        WorldTiersCharDB.flasksHidden = bar:IsShown() and true or nil
+        if WorldTiersCharDB.flasksHidden then bar:Hide() else bar:Show() Send("Y") end
     end
 end
 -- ---------------------------------------------------------------------------
@@ -8350,7 +8572,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnComboMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnFlaskMessage(msg) and not WT.OnResistMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end

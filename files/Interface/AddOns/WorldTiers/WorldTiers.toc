@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: World Tiers
-## Notes: The World Tiers window (with a Getting Started guide), the Paragon Board (with Glyphs), the Forge, the Materials Pouch, Auto-Sell, a one-page loot window, raids in the Dungeon Finder, instance maps on the world map, the transmog window, Paragon bar, item tooltips and a Paragon panel. /worldtiers, /wtguide, /paragon, /forge, /pouch, /autosell, /transmog.
-## Version: 0.37
+## Notes: The World Tiers window and Guide, the passive tree, skill gems, the Forge, the flask bar, the Materials Pouch, Auto-Sell, loot window, Dungeon Finder raids, instance maps, transmog and item tooltips. /worldtiers, /passive, /forge, /flasks, /pouch, /autosell, /transmog.
+## Version: 0.52
 ## OptionalDeps: Atlas
 ## SavedVariablesPerCharacter: WorldTiersCharDB
 

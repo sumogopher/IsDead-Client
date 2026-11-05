@@ -1,0 +1,7 @@
+<Bindings>
+	<Binding name="WORLDTIERS_FLASK1" header="WORLDTIERS">WorldTiers.DrinkFlask(1)</Binding>
+	<Binding name="WORLDTIERS_FLASK2">WorldTiers.DrinkFlask(2)</Binding>
+	<Binding name="WORLDTIERS_FLASK3">WorldTiers.DrinkFlask(3)</Binding>
+	<Binding name="WORLDTIERS_FLASK4">WorldTiers.DrinkFlask(4)</Binding>
+	<Binding name="WORLDTIERS_FLASK5">WorldTiers.DrinkFlask(5)</Binding>
+</Bindings>
