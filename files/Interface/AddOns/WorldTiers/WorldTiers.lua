@@ -562,8 +562,8 @@ local function PowerItems()
         items[#items + 1] = { t = WT.key.text .. (WT.key.best > 0 and ("  (best +" .. WT.key.best .. ")") or "") }
     end
     if WT.reserve and #WT.reserve > 4 and WT.GoldFromCopperString then
-        items[#items + 1] = { h = "Gold Reserve" }
-        items[#items + 1] = { t = "|cffffd100" .. WT.GoldFromCopperString(WT.reserve) .. "|r" }
+        items[#items + 1] = { h = "Gold" }
+        items[#items + 1] = { t = "|cffffd100" .. WT.GoldFromCopperString(WT.TotalCopper and WT.TotalCopper() or WT.reserve) .. "|r" }
     end
     return items
 end
@@ -4196,36 +4196,83 @@ local ROWS, ROW_H = 10, 40
 
 -- ---------------------------------------------------------------------------
 -- The Gold Reserve: gold past the game's cap, kept by the server without a
--- limit. Shown in the Forge, under the backpack's money, and on the panel.
+-- limit. 0.54.1: every money display of yours (backpack, merchant, bank, mail,
+-- auction house) shows your purse and the Reserve as one number, so the cap
+-- never shows; vendors already draw on the Reserve by themselves.
 -- ---------------------------------------------------------------------------
 
 WT.reserve = "0"
-local reserveText
-if ContainerFrame1MoneyFrame then
-    reserveText = ContainerFrame1MoneyFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    reserveText:SetPoint("TOPRIGHT", ContainerFrame1MoneyFrame, "BOTTOMRIGHT", -4, -2)
-    reserveText:Hide()
+
+-- two decimal strings of digits, added (any length: past what a Lua number holds exactly)
+local function AddDecimal(a, b)
+    local out, carry, i, j = {}, 0, #a, #b
+    while i > 0 or j > 0 or carry > 0 do
+        local s = (i > 0 and a:byte(i) - 48 or 0) + (j > 0 and b:byte(j) - 48 or 0) + carry
+        out[#out + 1] = string.char(48 + s % 10)
+        carry = math.floor(s / 10)
+        i, j = i - 1, j - 1
+    end
+    local r = table.concat(out):reverse():gsub("^0+", "")
+    return r == "" and "0" or r
+end
+WT.AddDecimal = AddDecimal
+
+-- your purse and the Reserve, in copper, as a decimal string
+function WT.TotalCopper(purse)
+    return AddDecimal(WT.reserve or "0", string.format("%.0f", math.max(0, purse or GetMoney())))
+end
+
+local function Group3(digits)
+    local out = digits:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return (out:gsub("^,", ""))
+end
+
+-- a player money frame (moneyType PLAYER) after the game drew it: the gold part with the Reserve added
+local function CombineMoney(frameName)
+    local frame = type(frameName) == "table" and frameName or (frameName and _G[frameName])
+    if not frame or frame.moneyType ~= "PLAYER" or not WT.reserve or #WT.reserve <= 4 then return end
+    local name = frame:GetName()
+    local gold = name and _G[name .. "GoldButton"]
+    local silver, copper = name and _G[name .. "SilverButton"], name and _G[name .. "CopperButton"]
+    if not gold or not silver or not copper then return end
+    local purse = GetMoney() - (GetCursorMoney and GetCursorMoney() or 0) - (GetPlayerTradeMoney and GetPlayerTradeMoney() or 0)
+    local total = ("0000" .. WT.TotalCopper(purse))
+    local g = total:sub(1, #total - 4):gsub("^0+", "")
+    local icon = frame.small and (MONEY_ICON_WIDTH_SMALL or 13) or (MONEY_ICON_WIDTH or 19)
+    local grow = 0
+    local function Put(button, text)
+        local before = button:GetWidth()
+        button:SetText(text)
+        button:Show()
+        local want = (button.GetTextWidth and button:GetTextWidth() or 0) + icon
+        button:SetWidth(want)
+        grow = grow + want - before
+    end
+    Put(gold, Group3(g == "" and "0" or g))
+    Put(silver, tostring(tonumber(total:sub(-4, -3)) or 0))
+    Put(copper, tostring(tonumber(total:sub(-2)) or 0))
+    if grow ~= 0 and frame.info and frame.info.collapse then frame:SetWidth(frame:GetWidth() + grow) end
+end
+if MoneyFrame_Update then hooksecurefunc("MoneyFrame_Update", CombineMoney) end
+
+local function RedrawMoney()
+    for _, n in ipairs({ "ContainerFrame1MoneyFrame", "MerchantMoneyFrame", "BankFrameMoneyFrame", "AuctionFrameMoneyFrame" }) do
+        local f = _G[n]
+        if f and f:IsVisible() and MoneyFrame_UpdateMoney then MoneyFrame_UpdateMoney(f) end
+    end
 end
 
 function WT.SetReserve(copper)
     WT.reserve = (copper or "0"):gsub("%D", "")
     if WT.reserve == "" then WT.reserve = "0" end
-    if reserveText then
-        if #WT.reserve > 4 then
-            reserveText:SetText("|cffffd100+" .. WT.GoldFromCopperString(WT.reserve) .. " in Reserve|r")
-            reserveText:Show()
-        else
-            reserveText:Hide()
-        end
-    end
+    RedrawMoney()
     if WT.RefreshPanel then WT.RefreshPanel() end
     if WT.forgeMoneyRefresh then WT.forgeMoneyRefresh() end
 end
 
 function WT.MoneyLine()
-    local line = "Your gold: " .. (GetCoinTextureString and GetCoinTextureString(GetMoney()) or tostring(math.floor(GetMoney() / 10000)) .. "g")
-    if #WT.reserve > 4 then line = line .. "   |cffffd100Reserve: " .. WT.GoldFromCopperString(WT.reserve) .. "|r" end
-    return line
+    if #WT.reserve > 4 then return "Your gold: |cffffd100" .. WT.GoldFromCopperString(WT.TotalCopper()) .. "|r" end
+    return "Your gold: " .. (GetCoinTextureString and GetCoinTextureString(GetMoney()) or tostring(math.floor(GetMoney() / 10000)) .. "g")
 end
 local forgeData = { items = {}, order = {}, tier = 0, tierName = "", money = 0, runes = {}, orbs = {} }
 local pendingForge = nil

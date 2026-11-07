@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: World Tiers
 ## Notes: The World Tiers window and Guide, the passive tree, skill gems, the Forge, the flask bar, the Materials Pouch, Auto-Sell, loot window, Dungeon Finder raids, instance maps, transmog and item tooltips. /worldtiers, /passive, /forge, /flasks, /lootalert, /pouch, /autosell, /transmog.
-## Version: 0.54
+## Version: 0.54.1
 ## OptionalDeps: Atlas
 ## SavedVariablesPerCharacter: WorldTiersCharDB
 
