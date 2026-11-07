@@ -3357,8 +3357,6 @@ end
 do
     local perks = { recovery = 15, ironWill = 95, snare = 30, flags = 127 }
     local LIST = {
-        { bit = 1, name = "Rapid Recovery", icon = "Spell_Nature_Rejuvenation",
-          text = function() return string.format("After 3 seconds out of combat you (and your pet) regain |cff1eff00%d%% of your health and mana every second|r until full. Not in battlegrounds.", perks.recovery) end },
         { bit = 2, name = "No Daze", icon = "Ability_Mount_RidingHorse",
           text = function() return "Enemies can no longer |cffff4040Daze|r you or your pet: being struck from behind while moving or mounted never slows you." end },
         { bit = 4, name = "No Resurrection Sickness", icon = "Spell_Holy_Resurrection",
@@ -3386,7 +3384,7 @@ do
         intro:SetWidth(760)
         intro:SetJustifyH("LEFT")
         intro:SetText("Permanent perks for everyone, always on. They're here to take some of the annoyances out of playing: "
-            .. "no waiting to drink after every fight, no being dazed off your mount, no feeding your pet or buying arrows, "
+            .. "no being dazed off your mount, no feeding your pet or buying arrows, "
             .. "and no being stunlocked from start to finish.")
         local rows = {}
         for i, p in ipairs(LIST) do
@@ -7020,7 +7018,8 @@ do
                 .. "Your World Tier is yours alone: a friend at another tier fights the same creature at theirs.\n\n"
                 .. "- " .. W .. "Tier I and up:" .. E .. " everything below your level is raised to your level (open world, dungeons, raids), "
                 .. "so old places stay worth your time and drop gear for your level.\n"
-                .. "- Each tier above I makes creatures tougher for you, and pays you back: more experience, better gear "
+                .. "- Each tier above I makes creatures tougher for you (most of all magic and rare monsters, Champions and bosses; "
+                .. "normal monsters come in big packs and still go down in a hit or two), and pays you back: more experience, better gear "
                 .. "(+15 item levels per tier), more gold.\n"
                 .. "- " .. W .. "Unlocking the next tier:" .. E .. " earn points at your highest unlocked tier: bosses (a raid's last boss most), Tier Keys, Champions and Treasure Goblins all count. Unlocked tiers are shared by your whole account. "
                 .. "The Overview tab shows your progress.\n"
@@ -7036,6 +7035,8 @@ do
                 .. "- " .. W .. "Uniques" .. E .. " (orange) have fixed lines; only their numbers roll, and a " .. W .. "Divine Orb" .. E .. " rerolls them. "
                 .. "A few chase uniques are very rare. A unique you find announces itself and glows in your bags.\n"
                 .. "- " .. W .. "Jewels" .. E .. " go in the passive tree's jewel sockets.\n"
+                .. "- A " .. W .. "glowing corpse" .. E .. " has something good on it: |cffff8000orange|r a unique, |cffa335eepurple|r an epic, "
+                .. "|cffffd100yellow|r an orb, gem, jewel or rune. Its name shows on screen as it drops (/lootalert turns that off).\n"
                 .. "- The " .. W .. "Forge" .. E .. " (/forge) is where you use " .. W .. "orbs" .. E .. ": Transmutation and Alchemy make Normal items "
                 .. "Magic and Rare, Alteration and Chaos reroll them, Augmentation, Regal and Exalted add affixes, Annulment and Scouring take them off. "
                 .. "Orbs drop from creatures; bosses give them from World Tier I.\n"
@@ -7881,6 +7882,61 @@ do
         if WorldTiersCharDB.flasksHidden then bar:Hide() else bar:Show() Send("Y") end
     end
 end
+
+-- ---------------------------------------------------------------------------
+-- Loot alerts (0.53): something good dropped from your kill. The server makes
+-- the corpse glow (orange unique, purple epic, yellow orb/gem/jewel/rune) and
+-- sends LD|kind|item|name: its name across the middle of the screen, and a
+-- sound. /lootalert switches them off and on.
+-- ---------------------------------------------------------------------------
+
+do
+    local KIND = {
+        U = { color = "ff8000", label = "Unique", sound = "RaidWarning" },
+        E = { color = "a335ee", label = "Epic", sound = "LEVELUPSOUND" },
+        G = { color = "ffd100", label = nil, sound = "LOOTWINDOWCOINSOUND" },
+    }
+    local f = CreateFrame("Frame", "WorldTiersLootAlert", UIParent)
+    Size(f, 600, 60)
+    f:SetPoint("TOP", UIParent, "TOP", 0, -170)
+    f:Hide()
+    local big = f:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    big:SetPoint("TOP")
+    local small = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    small:SetPoint("TOP", big, "BOTTOM", 0, -4)
+    local shownAt, HOLD, FADE = 0, 2.5, 1.0
+    f:SetScript("OnUpdate", function(self)
+        local t = GetTime() - shownAt
+        if t > HOLD + FADE then self:Hide() return end
+        self:SetAlpha(t < HOLD and 1 or 1 - (t - HOLD) / FADE)
+    end)
+    local queue = {}   -- the best one wins while one is showing
+    local RANK = { U = 3, E = 2, G = 1 }
+    local current
+
+    function WT.OnLootDropMessage(msg)
+        local kind, item, name = msg:match("^LD|(%a)|(%d+)|(.*)$")
+        if not kind then return false end
+        if WorldTiersCharDB and WorldTiersCharDB.lootAlertsOff then return true end
+        local k = KIND[kind] or KIND.G
+        if f:IsShown() and current and (RANK[current] or 0) > (RANK[kind] or 0) then return true end
+        current = kind
+        big:SetText("|cff" .. k.color .. name .. "|r")
+        small:SetText(k.label and (k.label .. " dropped: the corpse glows until you take it.") or "Dropped: the corpse glows until you take it.")
+        shownAt = GetTime()
+        f:SetAlpha(1)
+        f:Show()
+        PlaySound(k.sound)
+        return true
+    end
+
+    SLASH_WORLDTIERSLOOTALERT1 = "/lootalert"
+    SlashCmdList["WORLDTIERSLOOTALERT"] = function()
+        WorldTiersCharDB = WorldTiersCharDB or {}
+        WorldTiersCharDB.lootAlertsOff = not WorldTiersCharDB.lootAlertsOff or nil
+        DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffWorld Tiers:|r loot alerts " .. (WorldTiersCharDB.lootAlertsOff and "off" or "on") .. ".")
+    end
+end
 -- ---------------------------------------------------------------------------
 -- The passive tree's nodes (generated by tools/gen_passive_tree.py: edit it there)
 -- ---------------------------------------------------------------------------
@@ -8572,7 +8628,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnComboMessage(msg) and not WT.OnFlaskMessage(msg) and not WT.OnResistMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnFlaskMessage(msg) and not WT.OnResistMessage(msg) and not WT.OnLootDropMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end
