@@ -1757,8 +1757,10 @@ WT.GEMS = {
   [58] = { key = "BLOOD_MAGIC", name = "Blood Magic", rarity = 3, colour = "rare", a1 = 4, a20 = 2, aLow = true, aFix = false, aInt = false, b1 = 10, b20 = 19, bLow = false, bFix = false, text = "Costs no mana, rage, energy or runic power: {a}% of your health instead. {b}% more damage." },
   [59] = { key = "VOLATILE", name = "Volatile", rarity = 3, colour = "rare", a1 = 20, a20 = 20, aLow = false, aFix = true, aInt = false, b1 = 40, b20 = 79, bLow = false, bFix = false, text = "{a}% chance a hit explodes: {b}% of it as Fire to enemies within 8 yards of the target." },
   [60] = { key = "MIRROR_IMAGE", name = "Mirror Image", rarity = 3, colour = "rare", a1 = 35, a20 = 54, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "A mirror image of you uses the skill too: every hit repeats for {a}%." },
+  [61] = { key = "CORPSE_EXPLOSION", name = "Corpse Explosion", rarity = 2, colour = "orange", a1 = 8, a20 = 18, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "Enemies the supported skill kills explode: {a}% of their maximum health as damage of the skill's school to enemies within 6 yards." },
+  [62] = { key = "SOUL_SIPHON", name = "Soul Siphon", rarity = 2, colour = "green", a1 = 2, a20 = 5, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "Kills with the supported skill restore {a}% of your maximum health and mana." },
 }
-WT.GEM_COUNT = 60
+WT.GEM_COUNT = 62
 WT.GEM_AWAKENED_TEXT = "Awakened: +2 levels to the supported skill."
 WT.GEM_ITEM_FIRST, WT.GEM_AWAKENED_FIRST, WT.LINKING_ORB, WT.GEMCUTTER_SHARD = 992000, 992100, 992200, 992202
 
@@ -7019,7 +7021,8 @@ do
                 .. "- " .. W .. "Tier I and up:" .. E .. " everything below your level is raised to your level (open world, dungeons, raids), "
                 .. "so old places stay worth your time and drop gear for your level.\n"
                 .. "- Each tier above I makes creatures tougher for you (most of all magic and rare monsters, Champions and bosses; "
-                .. "normal monsters come in big packs and still go down in a hit or two), and pays you back: more experience, better gear "
+                .. "normal monsters come in big packs and still go down in a hit or two; magic ones glow |cff8888ffblue|r, rare ones |cffffff77yellow|r, "
+                .. "Champions |cffff4040red|r: target or mouse over one to see its modifiers), and pays you back: more experience, better gear "
                 .. "(+15 item levels per tier), more gold.\n"
                 .. "- " .. W .. "Unlocking the next tier:" .. E .. " earn points at your highest unlocked tier: bosses (a raid's last boss most), Tier Keys, Champions and Treasure Goblins all count. Unlocked tiers are shared by your whole account. "
                 .. "The Overview tab shows your progress.\n"
@@ -7036,7 +7039,7 @@ do
                 .. "A few chase uniques are very rare. A unique you find announces itself and glows in your bags.\n"
                 .. "- " .. W .. "Jewels" .. E .. " go in the passive tree's jewel sockets.\n"
                 .. "- A " .. W .. "glowing corpse" .. E .. " has something good on it: |cffff8000orange|r a unique, |cffa335eepurple|r an epic, "
-                .. "|cffffd100yellow|r an orb, gem, jewel or rune. Its name shows on screen as it drops (/lootalert turns that off).\n"
+                .. "white an orb, gem, jewel or rune. Its name shows on screen as it drops (/lootalert turns that off). Gold picks itself up.\n"
                 .. "- The " .. W .. "Forge" .. E .. " (/forge) is where you use " .. W .. "orbs" .. E .. ": Transmutation and Alchemy make Normal items "
                 .. "Magic and Rare, Alteration and Chaos reroll them, Augmentation, Regal and Exalted add affixes, Annulment and Scouring take them off. "
                 .. "Orbs drop from creatures; bosses give them from World Tier I.\n"
@@ -7064,7 +7067,12 @@ do
                 .. "They level as you use them.\n"
                 .. "- " .. W .. "Support gems" .. E .. " (Skills tab) link into a skill's sockets and change how it works. "
                 .. "Cast on Crit and the other trigger gems cast for you, with no global cooldown.\n"
-                .. "- " .. W .. "Speed" .. E .. ": attack and cast speed shorten the global cooldown, down to 0.2 sec.\n"
+                .. "- " .. W .. "Speed" .. E .. ": attack and cast speed shorten the global cooldown, down to 0.2 sec. No cast is longer than 0.75 sec, "
+                .. "and you can " .. W .. "cast while moving" .. E .. ".\n"
+                .. "- " .. W .. "Area by default" .. E .. ": projectile skills fork to two more enemies near the one they hit, single-target melee "
+                .. "strikes cleave the enemies around it in front of you (both at half damage).\n"
+                .. "- " .. W .. "On kill" .. E .. ": Corpse Explosion (kills explode), Soul Siphon (kills heal), Cast on Kill and Onslaught support gems, "
+                .. "and uniques that make enemies explode.\n"
                 .. "- " .. W .. "Ascendancies" .. E .. " (from level 80, Overview tab, or /ascend): one of four for your class, "
                 .. "each a big power of its own. Free to change out of combat." },
             { "Dungeons and Raids", G .. "Dungeons and Raids" .. E .. "\n\n"
@@ -7885,7 +7893,7 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Loot alerts (0.53): something good dropped from your kill. The server makes
--- the corpse glow (orange unique, purple epic, yellow orb/gem/jewel/rune) and
+-- the corpse glow (orange unique, purple epic, white orb/gem/jewel/rune) and
 -- sends LD|kind|item|name: its name across the middle of the screen, and a
 -- sound. /lootalert switches them off and on.
 -- ---------------------------------------------------------------------------
@@ -7936,6 +7944,94 @@ do
         WorldTiersCharDB.lootAlertsOff = not WorldTiersCharDB.lootAlertsOff or nil
         DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffWorld Tiers:|r loot alerts " .. (WorldTiersCharDB.lootAlertsOff and "off" or "on") .. ".")
     end
+end
+
+-- ---------------------------------------------------------------------------
+-- Magic and rare monsters at a glance (0.54). They glow (blue magic, yellow
+-- rare, red Champion: the server); target or mouse over one and its
+-- modifiers show beside the target frame and in its tooltip. The addon asks
+-- G:<guid>, the server answers MM|guid|rarity|title|name: what it does~...
+-- (rarity 0 none, 1 magic, 2 rare, 3 Champion).
+-- ---------------------------------------------------------------------------
+
+do
+    local COLOR = { [1] = "8888ff", [2] = "ffff77", [3] = "ff8000" }
+    local cache, asked = {}, {}   -- guid -> { rarity, title, lines, at }; guid -> when asked
+    local KEEP = 30
+
+    local panel = CreateFrame("Frame", "WorldTiersMonsterMods", TargetFrame or UIParent)
+    Size(panel, 190, 40)
+    panel:SetPoint("TOPLEFT", TargetFrame or UIParent, "TOPRIGHT", -36, -14)
+    panel:Hide()
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT")
+    title:SetJustifyH("LEFT")
+    local names = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    names:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+    names:SetWidth(190)
+    names:SetJustifyH("LEFT")
+
+    local function Ask(unit)
+        if not unit or not UnitExists(unit) or UnitIsPlayer(unit) or not UnitCanAttack("player", unit) then return nil end
+        local guid = UnitGUID(unit)
+        if not guid then return nil end
+        local c = cache[guid]
+        if c and GetTime() - c.at < KEEP then return c end
+        if not asked[guid] or GetTime() - asked[guid] > 3 then
+            asked[guid] = GetTime()
+            Send("G:" .. guid)
+        end
+        return nil
+    end
+
+    local function Split(s)
+        local t = {}
+        for line in (s or ""):gmatch("[^~]+") do t[#t + 1] = line end
+        return t
+    end
+
+    local function DrawTarget()
+        local c = Ask("target")
+        if not c or c.rarity == 0 then panel:Hide() return end
+        local col = COLOR[c.rarity] or "ffffff"
+        title:SetText("|cff" .. col .. c.title .. "|r")
+        local n = {}
+        for _, line in ipairs(c.lines) do n[#n + 1] = line:match("^([^:]+)") or line end
+        names:SetText(table.concat(n, ", "))
+        panel:Show()
+    end
+    WT.DrawMonsterMods = DrawTarget
+
+    -- the tooltip: every line in full
+    local function AddLines(tip)
+        local _, unit = tip:GetUnit()
+        local c = unit and Ask(unit)
+        if not c or c.rarity == 0 then return end
+        local col = COLOR[c.rarity] or "ffffff"
+        tip:AddLine("|cff" .. col .. c.title .. "|r")
+        for _, line in ipairs(c.lines) do
+            local name, text = line:match("^([^:]+):%s*(.*)$")
+            tip:AddLine(name and ("|cff" .. col .. name .. ":|r " .. text) or line, 1, 1, 1, true)
+        end
+        tip:Show()
+    end
+    if GameTooltip and GameTooltip.HookScript then GameTooltip:HookScript("OnTooltipSetUnit", AddLines) end
+
+    function WT.OnMonsterModsMessage(msg)
+        local guid, rarity, ttl, lines = msg:match("^MM|([^|]+)|(%d+)|([^|]*)|(.*)$")
+        if not guid then return false end
+        cache[guid] = { rarity = tonumber(rarity) or 0, title = ttl, lines = Split(lines), at = GetTime() }
+        if UnitGUID("target") == guid then DrawTarget() end
+        if GameTooltip:IsShown() and UnitGUID("mouseover") == guid then GameTooltip:SetUnit("mouseover") end
+        return true
+    end
+
+    local ev = CreateFrame("Frame")
+    ev:RegisterEvent("PLAYER_TARGET_CHANGED")
+    ev:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+    ev:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_TARGET_CHANGED" then DrawTarget() else Ask("mouseover") end
+    end)
 end
 -- ---------------------------------------------------------------------------
 -- The passive tree's nodes (generated by tools/gen_passive_tree.py: edit it there)
@@ -8628,7 +8724,7 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:SetScript("OnEvent", function(self, event, prefix, msg, channel, sender)
     if event == "CHAT_MSG_ADDON" then
         if prefix == PREFIX and sender == UnitName("player") then
-            if not WT.OnComboMessage(msg) and not WT.OnFlaskMessage(msg) and not WT.OnResistMessage(msg) and not WT.OnLootDropMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
+            if not WT.OnComboMessage(msg) and not WT.OnFlaskMessage(msg) and not WT.OnResistMessage(msg) and not WT.OnLootDropMessage(msg) and not WT.OnMonsterModsMessage(msg) and not WT.OnGcdMessage(msg) and not WT.OnShieldMessage(msg) and not WT.OnPassiveMessage(msg) and not WT.OnSkillGemMessage(msg) and not WT.OnItemMessage(msg) and not WT.OnForgeMessage(msg)
                 and not WT.OnChampionMessage(msg) and not WT.OnKeyMessage(msg) and not WT.OnLoadoutMessage(msg)
                 and not WT.OnPouchMessage(msg) and not WT.OnSellMessage(msg) and not WT.OnVersionMessage(msg) and not WT.OnTreasureMessage(msg) and not WT.OnAscMessage(msg) and not WT.OnTransmogMessage(msg) and not WT.OnHubMessage(msg) and not WT.OnSpecialMessage(msg) and not WT.OnSplashMessage(msg) and not WT.OnLootPreviewMessage(msg) and not WT.OnSkillMessage(msg) then OnMessage(msg) end
         end
