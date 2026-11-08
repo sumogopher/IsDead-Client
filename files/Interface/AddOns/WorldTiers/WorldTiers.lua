@@ -1762,8 +1762,11 @@ WT.GEMS = {
   [63] = { key = "CHANCE_TO_IGNITE", name = "Chance to Ignite", rarity = 0, colour = "red", a1 = 25, a20 = 44, aLow = false, aFix = false, aInt = false, b1 = 10, b20 = 29, bLow = false, bFix = false, text = "+{a}% chance to Ignite. {b}% more Ignite damage." },
   [64] = { key = "CHANCE_TO_SHOCK", name = "Chance to Shock", rarity = 0, colour = "yellow", a1 = 25, a20 = 44, aLow = false, aFix = false, aInt = false, b1 = 10, b20 = 29, bLow = false, bFix = false, text = "+{a}% chance to Shock. {b}% more effect of Shock." },
   [65] = { key = "CHANCE_TO_POISON", name = "Chance to Poison", rarity = 0, colour = "green", a1 = 25, a20 = 44, aLow = false, aFix = false, aInt = false, b1 = 10, b20 = 29, bLow = false, bFix = false, text = "+{a}% chance to Poison. {b}% more Poison damage." },
+  [66] = { key = "FRENZY_ON_KILL", name = "Frenzy Charge on Kill", rarity = 2, colour = "green", a1 = 20, a20 = 39, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "Kills with the supported skill have a {a}% chance to give you a Frenzy Charge (4% more damage, attack and cast speed each)." },
+  [67] = { key = "POWER_ON_KILL", name = "Power Charge on Kill", rarity = 2, colour = "blue", a1 = 20, a20 = 39, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "Kills with the supported skill have a {a}% chance to give you a Power Charge (+2% critical strike chance each)." },
+  [68] = { key = "ENDURANCE_ON_HIT", name = "Endurance Charge on Melee Hit", rarity = 2, colour = "red", a1 = 5, a20 = 14, aLow = false, aFix = false, aInt = false, b1 = 0, b20 = 0, bLow = false, bFix = false, text = "Melee hits with the supported skill have a {a}% chance to give you an Endurance Charge (4% less physical damage taken, +4% elemental resistances each)." },
 }
-WT.GEM_COUNT = 65
+WT.GEM_COUNT = 68
 WT.GEM_AWAKENED_TEXT = "Awakened: +2 levels to the supported skill."
 WT.GEM_ITEM_FIRST, WT.GEM_AWAKENED_FIRST, WT.LINKING_ORB, WT.GEMCUTTER_SHARD = 992000, 992100, 992200, 992202
 
@@ -7108,6 +7111,16 @@ do
                 .. "- Bosses can't be frozen and are chilled half as much.\n"
                 .. "- Creatures' fire, frost and nature hits ignite, chill and shock " .. W .. "you" .. E .. " too: "
                 .. W .. "chance to avoid Elemental Ailments" .. E .. " (boots, shields, armour) keeps them off." },
+            { "Charges", G .. "Endurance, Frenzy and Power Charges" .. E .. "\n\n"
+                .. "Buffs whose stacks are the charges, as in Path of Exile: 3 of each at most (+1 from rare gear). "
+                .. "Gaining one makes them all last 10 sec again; then they all go.\n"
+                .. "- |cffff6040Endurance|r: 4% less physical damage taken and +4% to all elemental resistances each. "
+                .. "Gained when hit (plate, shields, belts) or with Endurance Charge on Melee Hit.\n"
+                .. "- |cff40ff40Frenzy|r: 4% more damage and 4% increased attack and cast speed each. Gained on kill (quick weapons, "
+                .. "leather, rings) or with Frenzy Charge on Kill.\n"
+                .. "- |cff4080ffPower|r: +2% critical strike chance each. Gained on kill (caster weapons, off-hands, heads, jewellery) "
+                .. "or with Power Charge on Kill.\n"
+                .. "- Ascendancies give, and some of their skills spend, charges." },
             { "Defences and Flasks", G .. "Defences, movement and flasks" .. E .. "\n\n"
                 .. "- " .. W .. "Armour" .. E .. " (plate) cuts physical damage, " .. W .. "Evasion" .. E .. " (leather) makes attacks miss you, "
                 .. W .. "Energy Shield" .. E .. " (cloth) takes damage before your health and recharges 2 sec after you were last hit. "
