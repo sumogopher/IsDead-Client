@@ -545,17 +545,22 @@ local function PowerItems()
     items[#items + 1] = { h = "Ascendancy", hc = { 1, 0.5, 0 } }
     if asc then
         local f = Split(asc, "|")
-        local rank, picks = tonumber(f[2]) or 0, f[3] or ""
-        items[#items + 1] = { t = "|cffff8000" .. (f[1] or "?") .. "|r  -  Mastery " .. rank .. "/5" }
-        local chosen = {}
-        for r = 1, math.min(5, rank) do
-            local o = tonumber(picks:sub(r, r)) or 0
-            local m = WT.ASC_MASTERY and WT.ASC_MASTERY[r] and WT.ASC_MASTERY[r][o]
-            chosen[#chosen + 1] = m and m[1] or ("|cff808080rank " .. r .. ": not chosen|r")
+        -- 0.58: the tree's points spent, and its nodes (bits 0-5 small, 6-11 notables)
+        local spent, nodes = tonumber(f[2]) or 0, tonumber(f[3]) or 0
+        items[#items + 1] = { t = "|cffff8000" .. (f[1] or "?") .. "|r  -  " .. spent .. " of 8 points" }
+        local mine, names = nil, {}
+        if WT.AscInfo then
+            local list, chosen = WT.AscInfo()
+            mine = list and list[chosen]
         end
-        if #chosen > 0 then items[#items + 1] = { t = "Mastery: " .. table.concat(chosen, ", ") } end
+        for k = 1, 6 do
+            if math.floor(nodes / 2 ^ (k + 5)) % 2 == 1 then
+                names[#names + 1] = (mine and mine.notes and mine.notes[k] and mine.notes[k].name) or ("notable " .. k)
+            end
+        end
+        if #names > 0 then items[#items + 1] = { t = "Notables: " .. table.concat(names, ", ") } end
     else
-        items[#items + 1] = { t = "|cff808080None chosen. From level 80: World Tiers window, Overview (or /ascend).|r" }
+        items[#items + 1] = { t = "|cff808080None chosen. From level 30: World Tiers window, Overview (or /ascend).|r" }
     end
     if WT.key and WT.key.text ~= "" then
         items[#items + 1] = { h = "Tier Key", hc = { 0.64, 0.21, 0.93 } }
@@ -1395,18 +1400,17 @@ do
         return true
     end
 end
-
 -- ---------------------------------------------------------------------------
--- Ascendancies (0.57), as in Path of Exile: three for your class, each six
--- notables; you pick four, one at each of levels 30, 60, 80 and 100. Some
--- notables grant a skill for your bar. Changing is free, out of combat.
--- Opened from the World Tiers window (Overview) or /ascend.
--- JA|slot|name|icon|theme   JN|slot|k|name|icon|skill|text
--- JE|chosen|level|allowed|p1,p2,p3,p4|30,60,80,100   back: J, JC:n, JN:k, JR
+-- Ascendancies (0.57; trees 0.58), as in Path of Exile: three for your class,
+-- each a tree of its own. From its start, six branches: a small node, then a
+-- notable. A point a node, two at each of levels 30, 60, 80 and 100; a notable
+-- needs the small node before it. Some notables grant a skill for your bar.
+-- Changing is free, out of combat. Opened from the World Tiers window or /ascend.
+-- JA|slot|name|icon|theme   JS|slot|name|icon|text   JN|slot|k|name|icon|skill|text
+-- JE|chosen|level|points|nodes|30,60,80,100   back: J, JC:n, JT:i (1-6 small, 7-12 notable), JR
 -- ---------------------------------------------------------------------------
-
 do
-    local asc = { list = {}, chosen = 0, need = 30, level = 0, allowed = 0, picks = { 0, 0, 0, 0 }, at = { 30, 60, 80, 100 }, view = 1 }
+    local asc = { list = {}, chosen = 0, need = 30, level = 0, points = 0, nodes = 0, at = { 30, 60, 80, 100 }, view = 1 }
 
     local W, H = 780, 610
     local function Button(parent, w, h, text)
@@ -1443,14 +1447,20 @@ do
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
 
-    local function Picked(k)
-        for i = 1, 4 do if asc.picks[i] == k then return true end end
-        return false
+    -- a node's bit: small k is bit k-1, notable k is bit k+5
+    local function Has(nodes, i)
+        local b = i <= 6 and (i - 1) or (i - 7 + 6)
+        return math.floor((nodes or 0) / 2 ^ b) % 2 == 1
     end
     local function Used()
         local n = 0
-        for i = 1, 4 do if (asc.picks[i] or 0) > 0 then n = n + 1 end end
+        for i = 1, 12 do if Has(asc.nodes, i) then n = n + 1 end end
         return n
+    end
+    local function Notables()
+        local t = {}
+        for k = 1, 6 do if Has(asc.nodes, 6 + k) then t[#t + 1] = k end end
+        return t
     end
 
     -- ---- the three Ascendancies
@@ -1484,62 +1494,154 @@ do
         cards[i] = c
     end
 
-    -- ---- the six notables of the one shown
-    local nodes = {}
+    -- ---- the tree of the one shown: a start, six branches of a small node and a notable
+    local TREE = 410
+    local canvas = CreateFrame("Frame", nil, f)
+    Size(canvas, TREE, TREE)
+    canvas:SetPoint("TOPLEFT", 26, -138)
+    canvas:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    canvas:SetBackdropColor(0.03, 0.02, 0.01, 0.85)
+    canvas:SetBackdropBorderColor(0.5, 0.35, 0.1)
+    local CX, CY, R1, R2 = TREE / 2, TREE / 2, 88, 168
+    local function Spot(k, r)
+        local a = math.rad(90 - (k - 1) * 60)
+        return CX + r * math.cos(a), CY + r * math.sin(a)
+    end
+    -- the lines first, under the nodes
+    local lines = {}
     for k = 1, 6 do
-        local n = CreateFrame("Button", nil, f)
-        Size(n, 360, 112)
-        local col, row = (k - 1) % 2, math.floor((k - 1) / 2)
-        n:SetPoint("TOPLEFT", 22 + col * 376, -168 - row * 122)
-        n:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        local sx, sy = Spot(k, R1)
+        local nx, ny = Spot(k, R2)
+        local a = canvas:CreateTexture(nil, "BORDER")
+        DrawLine(a, canvas, CX, CY, sx, sy, 22)
+        local b = canvas:CreateTexture(nil, "BORDER")
+        DrawLine(b, canvas, sx, sy, nx, ny, 22)
+        lines[k] = { a, b }
+    end
+    local tip = GameTooltip
+    local nodeBtn = {}
+    local function NodeButton(size)
+        local n = CreateFrame("Button", nil, canvas)
+        Size(n, size, size)
+        n:SetFrameLevel(canvas:GetFrameLevel() + 2)
+        local back = n:CreateTexture(nil, "BACKGROUND")
+        back:SetTexture(0, 0, 0, 1)
+        back:SetPoint("TOPLEFT", -3, 3)
+        back:SetPoint("BOTTOMRIGHT", 3, -3)
+        n.back = back
         local icon = n:CreateTexture(nil, "ARTWORK")
-        Size(icon, 40, 40)
-        icon:SetPoint("TOPLEFT", 10, -10)
+        icon:SetAllPoints()
+        icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         n.icon = icon
         local ring = n:CreateTexture(nil, "OVERLAY")
         ring:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
         ring:SetBlendMode("ADD")
-        Size(ring, 72, 72)
-        ring:SetPoint("CENTER", icon, "CENTER")
+        Size(ring, size * 1.8, size * 1.8)
+        ring:SetPoint("CENTER")
         n.ring = ring
-        local name = n:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 0)
-        name:SetWidth(290)
-        name:SetJustifyH("LEFT")
-        n.name = name
-        local text = n:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        text:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
-        text:SetWidth(292)
-        text:SetHeight(64)
-        text:SetJustifyH("LEFT")
-        text:SetJustifyV("TOP")
-        n.text = text
-        local state = n:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        state:SetPoint("BOTTOMLEFT", 10, 8)
-        n.state = state
-        n.k = k
+        n:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        return n
+    end
+    local start = NodeButton(52)
+    start:SetPoint("CENTER", canvas, "BOTTOMLEFT", CX, CY)
+    start:SetScript("OnEnter", function(self)
+        local a = asc.list[asc.view]
+        if not a then return end
+        tip:SetOwner(self, "ANCHOR_RIGHT")
+        tip:AddLine(a.name, 1, 0.5, 0)
+        tip:AddLine(a.theme or "", 1, 1, 1, true)
+        tip:Show()
+    end)
+    start:SetScript("OnLeave", function() tip:Hide() end)
+
+    -- what a node is and what it may do now: "taken", "open" (a point free and its way taken), "closed"
+    local function NodeState(i)
+        if Has(asc.nodes, i) then return "taken" end
+        if i > 6 and not Has(asc.nodes, i - 6) then return "closed" end
+        if Used() >= asc.points then return "nopoint" end
+        return "open"
+    end
+    local function NodeInfo(i)
+        local a = asc.list[asc.view]
+        if not a then return nil end
+        if i <= 6 then return a.small end
+        return a.notes and a.notes[i - 6]
+    end
+    for i = 1, 12 do
+        local k = i <= 6 and i or i - 6
+        local n = NodeButton(i <= 6 and 30 or 46)
+        local x, y = Spot(k, i <= 6 and R1 or R2)
+        n:SetPoint("CENTER", canvas, "BOTTOMLEFT", x, y)
+        n.i = i
+        if i > 6 then
+            local label = n:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            local below = y < CY
+            label:SetPoint(below and "TOP" or "BOTTOM", n, below and "BOTTOM" or "TOP", 0, below and -4 or 4)
+            label:SetWidth(120)
+            n.label = label
+        end
+        n:SetScript("OnEnter", function(self)
+            local d = NodeInfo(self.i)
+            if not d then return end
+            tip:SetOwner(self, "ANCHOR_RIGHT")
+            tip:AddLine(d.name or "?", self.i > 6 and 1 or 0.85, self.i > 6 and 0.5 or 0.85, self.i > 6 and 0 or 0.85)
+            if d.skill then tip:AddLine("Grants a skill for your bar", 1, 0.5, 0) end
+            tip:AddLine(d.text or "", 1, 1, 1, true)
+            tip:AddLine(" ")
+            local mine = asc.view == asc.chosen
+            local s = NodeState(self.i)
+            if not mine then tip:AddLine("Ascend as this one to take its nodes.", 0.6, 0.6, 0.6, true)
+            elseif s == "taken" then
+                if self.i <= 6 and Has(asc.nodes, self.i + 6) then tip:AddLine("Taken. Give back the notable past it first.", 0.2, 1, 0.2, true)
+                else tip:AddLine("Taken. Click to give the point back.", 0.2, 1, 0.2, true) end
+            elseif s == "closed" then tip:AddLine("Take the small node before it first.", 1, 0.3, 0.3, true)
+            elseif s == "nopoint" then tip:AddLine("No point free.", 1, 0.3, 0.3, true)
+            else tip:AddLine("Click to take it (1 point).", 1, 0.82, 0) end
+            tip:Show()
+        end)
+        n:SetScript("OnLeave", function() tip:Hide() end)
         n:SetScript("OnClick", function(self)
             if asc.view ~= asc.chosen then
                 UIErrorsFrame:AddMessage("Ascend as this one first (the button below).", 1, 0.3, 0.3)
                 return
             end
-            Send("JN:" .. self.k)
+            Send("JT:" .. self.i)
         end)
-        nodes[k] = n
+        nodeBtn[i] = n
     end
+
+    -- ---- beside it: what is taken
+    local info = CreateFrame("Frame", nil, f)
+    Size(info, 310, TREE)
+    info:SetPoint("TOPLEFT", canvas, "TOPRIGHT", 12, 0)
+    info:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    info:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+    info:SetBackdropBorderColor(0.4, 0.4, 0.4)
+    local infoName = info:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    infoName:SetPoint("TOPLEFT", 14, -14)
+    infoName:SetWidth(282)
+    infoName:SetJustifyH("LEFT")
+    infoName:SetTextColor(1, 0.5, 0)
+    local infoText = info:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    infoText:SetPoint("TOPLEFT", infoName, "BOTTOMLEFT", 0, -10)
+    infoText:SetWidth(282)
+    infoText:SetHeight(TREE - 60)
+    infoText:SetJustifyH("LEFT")
+    infoText:SetJustifyV("TOP")
 
     -- ---- the foot: points, and what to do
     local points = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     points:SetPoint("BOTTOMLEFT", 26, 24)
-    points:SetWidth(460)
+    points:SetWidth(400)
     points:SetJustifyH("LEFT")
     local choose = Button(f, 200, 24, "Ascend")
     choose:SetPoint("BOTTOMRIGHT", -26, 20)
     choose:SetScript("OnClick", function()
         if asc.view == asc.chosen then Send("JC:0") else Send("JC:" .. asc.view) end
     end)
-    local reset = Button(f, 110, 24, "Unpick all")
+    local reset = Button(f, 110, 24, "Refund all")
     reset:SetPoint("RIGHT", choose, "LEFT", -8, 0)
     reset:SetScript("OnClick", function() Send("JR") end)
 
@@ -1561,42 +1663,78 @@ do
         end
         local a = asc.list[asc.view]
         local mine = asc.view == asc.chosen
-        for k, n in ipairs(nodes) do
-            local d = a and a.notes and a.notes[k]
-            if d then
-                n.icon:SetTexture("Interface\\Icons\\" .. (d.icon or "INV_Misc_QuestionMark"))
-                local picked = mine and Picked(k)
-                n.name:SetText((d.skill and "|cffff8000" or "|cffffd100") .. d.name .. "|r" .. (d.skill and "  |cffff8000(skill)|r" or ""))
-                n.text:SetText(d.text or "")
-                n.icon:SetDesaturated(not picked)
-                if picked then
-                    n.ring:SetVertexColor(1, 0.5, 0) n.ring:Show()
-                    n:SetBackdropBorderColor(1, 0.5, 0)
-                    n:SetBackdropColor(0.18, 0.1, 0.02, 0.95)
-                    n.state:SetText("|cff20ff20Picked|r - click to unpick")
-                else
-                    n.ring:Hide()
-                    n:SetBackdropBorderColor(0.35, 0.35, 0.35)
-                    n:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
-                    n.state:SetText(not mine and "|cff888888(another Ascendancy)|r"
-                        or (Used() < asc.allowed) and "|cffffd100Click to pick|r" or "|cff888888No point free|r")
-                end
-                n:Show()
+        local nodes = mine and asc.nodes or 0
+        start.icon:SetTexture("Interface\\Icons\\" .. ((a and a.icon) or "INV_Misc_QuestionMark"))
+        start.ring:SetVertexColor(1, 0.5, 0)
+        if mine then start.ring:Show() else start.ring:Hide() end
+        start.icon:SetDesaturated(not mine)
+        for i, n in ipairs(nodeBtn) do
+            local d = NodeInfo(i)
+            n.icon:SetTexture("Interface\\Icons\\" .. ((d and d.icon) or "INV_Misc_QuestionMark"))
+            local s = mine and NodeState(i) or "closed"
+            if s == "taken" then
+                n.icon:SetDesaturated(false) n.icon:SetVertexColor(1, 1, 1)
+                n.ring:SetVertexColor(1, 0.5, 0) n.ring:Show()
+                n.back:SetTexture(1, 0.5, 0, 1)
+            elseif s == "open" then
+                n.icon:SetDesaturated(false) n.icon:SetVertexColor(0.75, 0.75, 0.75)
+                n.ring:SetVertexColor(1, 0.85, 0.2) n.ring:Show()
+                n.back:SetTexture(0.6, 0.5, 0.1, 1)
             else
-                n:Hide()
+                n.icon:SetDesaturated(true) n.icon:SetVertexColor(0.55, 0.55, 0.55)
+                n.ring:Hide()
+                n.back:SetTexture(0.2, 0.2, 0.2, 1)
             end
+            if i > 6 then
+                n.label:SetText(d and ((d.skill and "|cffff8000" or (s == "taken" and "|cffffd100" or "|cffb0b0b0")) .. (d.name or "") .. "|r") or "")
+            end
+        end
+        for k, l in ipairs(lines) do
+            local small, notable = Has(nodes, k), Has(nodes, 6 + k)
+            if small then l[1]:SetVertexColor(1, 0.55, 0.1, 1) else l[1]:SetVertexColor(0.35, 0.3, 0.25, 0.8) end
+            if notable then l[2]:SetVertexColor(1, 0.55, 0.1, 1) else l[2]:SetVertexColor(0.35, 0.3, 0.25, 0.8) end
+        end
+        -- beside: the small nodes' bonus, the notables taken
+        if a then
+            infoName:SetText(a.name)
+            local lines2 = { a.theme or "", " " }
+            local smalls = 0
+            for k = 1, 6 do if Has(nodes, k) then smalls = smalls + 1 end end
+            if a.small then
+                lines2[#lines2 + 1] = string.format("|cffffd100Small nodes (%s), %d taken:|r each %s", a.small.name or "?", smalls,
+                    (a.small.text or ""):gsub("^%u", string.lower))
+                lines2[#lines2 + 1] = " "
+            end
+            local took = {}
+            for k = 1, 6 do
+                if Has(nodes, 6 + k) and a.notes and a.notes[k] then
+                    took[#took + 1] = "|cffff8000" .. a.notes[k].name .. "|r: " .. (a.notes[k].text or "")
+                end
+            end
+            if not mine then
+                lines2[#lines2 + 1] = "|cff888888Not your Ascendancy: hover its nodes to read them, or ascend as it below.|r"
+            elseif #took > 0 then
+                lines2[#lines2 + 1] = "|cffffd100Notables:|r"
+                for _, t in ipairs(took) do lines2[#lines2 + 1] = t end
+            else
+                lines2[#lines2 + 1] = "|cff888888No notables yet: take a small node, then the notable past it.|r"
+            end
+            infoText:SetText(table.concat(lines2, "\n"))
+        else
+            infoName:SetText("")
+            infoText:SetText("")
         end
         -- the milestones
         local marks = {}
         for i, at in ipairs(asc.at) do
-            marks[i] = (level >= at and "|cff20ff20" or "|cff888888") .. "Level " .. at .. "|r"
+            marks[i] = (level >= at and "|cff20ff20" or "|cff888888") .. "L" .. at .. "|r"
         end
-        points:SetText(string.format("Picked |cffffd100%d of %d|r:  %s", Used(), asc.allowed, table.concat(marks, "  ")))
+        points:SetText(string.format("Points |cffffd100%d/%d|r  %s", mine and Used() or 0, asc.points, table.concat(marks, "  ")))
         if level < asc.need then
-            sub:SetText(string.format("Your Ascendancy opens at level %d: three for your class, each with six notables to pick from.", asc.need))
+            sub:SetText(string.format("Your Ascendancy opens at level %d: three for your class, each a tree of its own.", asc.need))
             choose:Disable()
         else
-            sub:SetText("Choose one of three; pick a notable at each of levels 30, 60, 80 and 100. Free to change out of combat.")
+            sub:SetText("Choose one of three. Two points at each of levels 30, 60, 80 and 100: a small node, then the notable past it. Free to change out of combat.")
             choose:Enable()
         end
         choose:SetText(mine and "Give it up" or ("Ascend: " .. (a and a.name or "?")))
@@ -1615,13 +1753,18 @@ do
 
     local building = nil
     function WT.OnAscMessage(msg)
-        local cmd = msg:match("^(J[AEN])|")
+        local cmd = msg:match("^(J[AENS])|")
         if not cmd then return false end
         if cmd == "JA" then
             local slot, name, icon, theme = msg:match("^JA|(%d+)|([^|]*)|([^|]*)|(.*)$")
             slot = tonumber(slot) or 0
             building = building or {}
             building[slot] = { name = name or "?", icon = icon, theme = theme, text = theme, notes = {} }
+        elseif cmd == "JS" then
+            local slot, name, icon, text = msg:match("^JS|(%d+)|([^|]*)|([^|]*)|(.*)$")
+            slot = tonumber(slot) or 0
+            local into = (building and building[slot]) or asc.list[slot]
+            if into then into.small = { name = name, icon = icon, text = text } end
         elseif cmd == "JN" then
             local slot, k, name, icon, skill, text = msg:match("^JN|(%d+)|(%d+)|([^|]*)|([^|]*)|(%d)|(.*)$")
             slot, k = tonumber(slot) or 0, tonumber(k) or 0
@@ -1630,12 +1773,9 @@ do
                 into.notes[k] = { name = name, icon = icon, skill = skill == "1", text = text }
             end
         else
-            local chosen, level, allowed, picks, at = msg:match("^JE|(%d+)|(%d+)|(%d+)|([%d,]*)|([%d,]*)")
+            local chosen, level, points, nodes, at = msg:match("^JE|(%d+)|(%d+)|(%d+)|(%d+)|([%d,]*)")
             if building then asc.list, building = building, nil end
-            asc.chosen, asc.level, asc.allowed = tonumber(chosen) or 0, tonumber(level) or 0, tonumber(allowed) or 0
-            local p = {}
-            for v in (picks or ""):gmatch("%d+") do p[#p + 1] = tonumber(v) end
-            asc.picks = { p[1] or 0, p[2] or 0, p[3] or 0, p[4] or 0 }
+            asc.chosen, asc.level, asc.points, asc.nodes = tonumber(chosen) or 0, tonumber(level) or 0, tonumber(points) or 0, tonumber(nodes) or 0
             local a = {}
             for v in (at or ""):gmatch("%d+") do a[#a + 1] = tonumber(v) end
             if #a == 4 then asc.at = a asc.need = a[1] end
@@ -1648,7 +1788,7 @@ do
     -- what the World Tiers window shows: the list, the one chosen, when they open, the picks
     function WT.AscInfo()
         local mastery = {}
-        mastery[asc.chosen] = { rank = Used(), allowed = asc.allowed, picks = asc.picks }
+        mastery[asc.chosen] = { rank = Used(), allowed = asc.points, picks = Notables(), nodes = asc.nodes }
         return asc.list, asc.chosen, asc.need, asc.level, mastery
     end
     function WT.AskAscendancies() Send("J") end
@@ -6850,9 +6990,9 @@ do
         TipOn(iconB, function()
             local a, need = Mine()
             if a then return a.name, a.text end
-            return "Ascendancy", string.format("From level %d: one of three for your class, with six notables to pick from (one at each of levels 30, 60, 80, 100).", need or 30)
+            return "Ascendancy", string.format("From level %d: one of three for your class, each a tree of its own (two points at each of levels 30, 60, 80, 100).", need or 30)
         end)
-        TipOn(b, function() return "Ascendancy", "Choose one of three, or change it, and its notables: free, any time out of combat. Also /ascend." end)
+        TipOn(b, function() return "Ascendancy", "Choose one of three, or change it, and its tree: free, any time out of combat. Also /ascend." end)
         local function Refresh()
             if not WT.AscInfo then return end
             local a, need, level, m = Mine()
@@ -6861,7 +7001,7 @@ do
                 icon:SetTexture("Interface\\Icons\\INV_Misc_Key_03")
                 icon:SetDesaturated(true)
                 name:SetText("Opens at level " .. need)
-                text:SetText("One of three for your class, with six notables: pick one at each of levels 30, 60, 80 and 100.")
+                text:SetText("One of three for your class, each a tree: two points at each of levels 30, 60, 80 and 100.")
                 b:SetText("Preview...")
                 border:Hide()
             elseif a then
@@ -6874,7 +7014,7 @@ do
                 if m and m.picks and a.notes then
                     for _, k in ipairs(m.picks) do if k > 0 and a.notes[k] then picked[#picked + 1] = a.notes[k].name end end
                 end
-                text:SetText(string.format("|cffffd100Notables %d/%d:|r %s", m and m.rank or 0, m and m.allowed or 0,
+                text:SetText(string.format("|cffffd100Points %d/%d.|r Notables: %s", m and m.rank or 0, m and m.allowed or 0,
                     #picked > 0 and table.concat(picked, ", ") or "none yet - open the window to pick") .. "\n\n" .. (a.text or ""))
                 b:SetText("Change...")
                 border:Show()
@@ -6882,7 +7022,7 @@ do
                 icon:SetTexture("Interface\\Icons\\Spell_Holy_AuraMastery")
                 icon:SetDesaturated(false)
                 name:SetText("Choose an Ascendancy")
-                text:SetText("One of three for your class, with six notables: pick one at each of levels 30, 60, 80 and 100. Free to change out of combat.")
+                text:SetText("One of three for your class, each a tree: two points at each of levels 30, 60, 80 and 100. Free to change out of combat.")
                 b:SetText("Choose...")
                 border:Hide()
             end
