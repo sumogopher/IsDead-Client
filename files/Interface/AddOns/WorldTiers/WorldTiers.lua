@@ -1397,33 +1397,26 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- Ascendancies: from level 80, one of four for your class, each a big
--- defining power of its own, on top of whatever keystones you run. Chosen in
--- this window, opened from the World Tiers window (Overview) or /ascend.
--- JA|slot|name|icon||text   JE|chosen|level needed|character level
--- Mastery (0.30): JT|<points for ranks 1-5>   JM|slot|points|rank|picks; JP:rank:choice back
--- (the empty field once named keystones it empowered; shown if a server sends one)
+-- Ascendancies (0.57), as in Path of Exile: three for your class, each six
+-- notables; you pick four, one at each of levels 30, 60, 80 and 100. Some
+-- notables grant a skill for your bar. Changing is free, out of combat.
+-- Opened from the World Tiers window (Overview) or /ascend.
+-- JA|slot|name|icon|theme   JN|slot|k|name|icon|skill|text
+-- JE|chosen|level|allowed|p1,p2,p3,p4|30,60,80,100   back: J, JC:n, JN:k, JR
 -- ---------------------------------------------------------------------------
 
 do
-    local asc = { list = {}, building = nil, chosen = 0, need = 80, level = 0, mastery = {}, at = { 250, 800, 2000, 4500, 9000 } }
-    -- the Mastery choices, rank by rank (the server works the same ones)
-    local MASTERY = {
-        { { "Potency", "Your Ascendancy's own strikes, bursts, pulses, shields and heals are 25% stronger." },
-          { "Reach", "Its areas are 30% larger, and its effects that pick targets take one more." } },
-        { { "Tempo", "Its timed effects come 25% sooner, its chances are 25% higher, and its counted hits come one sooner." },
-          { "Fortitude", "You take 8% less damage, and its strikes heal you for 1% of your health (once a second)." } },
-        { { "Fervor", "Its percentage bonuses are 30% larger: damage, damage reduction, leech, healing, pet power and stats, kill stacks." },
-          { "Resonance", "Its strikes echo a second later for 35% of their damage." } },
-        { { "Dominion", "Every kill: 2% more damage for 15 sec, up to 10 times." },
-          { "Bulwark", "Below half health you take 20% less damage." } },
-        { { "Apotheosis", "Every 60 sec in combat you ascend for 8 sec: its strikes, bursts and heals are doubled." },
-          { "Overflow", "15% of the damage its strikes deal heals you." } },
-    }
-    WT.ASC_MASTERY = MASTERY
+    local asc = { list = {}, chosen = 0, need = 30, level = 0, allowed = 0, picks = { 0, 0, 0, 0 }, at = { 30, 60, 80, 100 }, view = 1 }
 
+    local W, H = 780, 610
+    local function Button(parent, w, h, text)
+        local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        Size(b, w, h)
+        b:SetText(text)
+        return b
+    end
     local f = CreateFrame("Frame", "WorldTiersAscendancyFrame", UIParent)
-    Size(f, 660, 596)
+    Size(f, W, H)
     f:SetPoint("CENTER", 0, 20)
     f:SetFrameStrata("DIALOG")
     f:SetToplevel(true)
@@ -1446,250 +1439,224 @@ do
     title:SetText("Ascendancy")
     local sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
-    sub:SetWidth(600)
+    sub:SetWidth(W - 60)
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
 
-    StaticPopupDialogs["WORLDTIERS_ASCEND"] = {
-        text = "%s",
-        button1 = ACCEPT, button2 = CANCEL,
-        OnAccept = function(self, data) if data then Send("JC:" .. data) end end,
-        timeout = 0, whileDead = 1, hideOnEscape = 1,
-    }
+    local function Picked(k)
+        for i = 1, 4 do if asc.picks[i] == k then return true end end
+        return false
+    end
+    local function Used()
+        local n = 0
+        for i = 1, 4 do if (asc.picks[i] or 0) > 0 then n = n + 1 end end
+        return n
+    end
 
+    -- ---- the three Ascendancies
     local cards = {}
-    for i = 1, 4 do
-        local c = CreateFrame("Frame", nil, f)
-        Size(c, 304, 176)
-        c:SetPoint("TOPLEFT", 20 + ((i - 1) % 2) * 316, -62 - math.floor((i - 1) / 2) * 186)
+    for i = 1, 3 do
+        local c = CreateFrame("Button", nil, f)
+        Size(c, 240, 74)
+        c:SetPoint("TOPLEFT", 22 + (i - 1) * 248, -54)
         c:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                        tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-        c.icon = c:CreateTexture(nil, "ARTWORK")
-        Size(c.icon, 40, 40)
-        c.icon:SetPoint("TOPLEFT", 12, -12)
-        c.name = c:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        c.name:SetPoint("TOPLEFT", c.icon, "TOPRIGHT", 10, -2)
-        c.name:SetWidth(232)
-        c.name:SetJustifyH("LEFT")
-        c.ks = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        c.ks:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, -3)
-        c.ks:SetWidth(232)
-        c.ks:SetJustifyH("LEFT")
-        c.ks:SetTextColor(1, 0.82, 0)
-        c.text = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        c.text:SetPoint("TOPLEFT", 12, -60)
-        c.text:SetWidth(280)
-        c.text:SetHeight(84)
-        c.text:SetJustifyH("LEFT")
-        c.text:SetJustifyV("TOP")
-        c.button = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
-        Size(c.button, 110, 22)
-        c.button:SetPoint("BOTTOMRIGHT", -10, 10)
-        c.state = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        c.state:SetPoint("BOTTOMLEFT", 12, 14)
+            tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        c:SetBackdropColor(0.08, 0.06, 0.04, 0.9)
+        local icon = c:CreateTexture(nil, "ARTWORK")
+        Size(icon, 44, 44)
+        icon:SetPoint("LEFT", 10, 0)
+        c.icon = icon
+        local name = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 0)
+        name:SetWidth(170)
+        name:SetJustifyH("LEFT")
+        c.name = name
+        local theme = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        theme:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
+        theme:SetWidth(172)
+        theme:SetJustifyH("LEFT")
+        c.theme = theme
+        local tag = c:CreateFontString(nil, "OVERLAY", "GameFontGreenSmall")
+        tag:SetPoint("BOTTOMRIGHT", -8, 6)
+        c.tag = tag
+        c.index = i
+        c:SetScript("OnClick", function(self) asc.view = self.index WT.RefreshAscendancyWindow() end)
         cards[i] = c
     end
-    -- ---------------- Mastery: the chosen one's ranks ----------------
-    local mf = CreateFrame("Frame", nil, f)
-    Size(mf, 620, 132)
-    mf:SetPoint("TOPLEFT", 20, -432)
-    mf:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                     tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    mf:SetBackdropColor(0.08, 0.05, 0.02, 0.9)
-    mf:SetBackdropBorderColor(1, 0.5, 0, 0.8)
-    local mTitle = mf:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    mTitle:SetPoint("TOPLEFT", 12, -10)
-    mTitle:SetTextColor(1, 0.5, 0)
-    local mBar = CreateFrame("StatusBar", nil, mf)
-    Size(mBar, 260, 14)
-    mBar:SetPoint("TOPRIGHT", -12, -10)
-    mBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    mBar:SetStatusBarColor(1, 0.5, 0)
-    mBar:SetMinMaxValues(0, 1)
-    local mBarBg = mBar:CreateTexture(nil, "BACKGROUND")
-    mBarBg:SetAllPoints()
-    mBarBg:SetTexture(0, 0, 0, 0.6)
-    local mBarText = mBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    mBarText:SetPoint("CENTER", 0, 0)
-    local mEmpty = mf:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    mEmpty:SetPoint("CENTER", 0, -10)
-    mEmpty:SetWidth(560)
-    local mCols = {}
-    for r = 1, 5 do
-        local col = { buttons = {} }
-        col.label = mf:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        col.label:SetPoint("TOPLEFT", 12 + (r - 1) * 121, -34)
-        col.label:SetWidth(116)
-        col.label:SetJustifyH("LEFT")
-        for o = 1, 2 do
-            local b = CreateFrame("Button", nil, mf, "UIPanelButtonTemplate")
-            Size(b, 114, 22)
-            b:SetPoint("TOPLEFT", 12 + (r - 1) * 121, -50 - (o - 1) * 26)
-            b:SetText(MASTERY[r][o][1])
-            b:SetScript("OnClick", function()
-                if b.open and not b.mine then Send("JP:" .. r .. ":" .. o) end
-            end)
-            b:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                GameTooltip:AddLine(MASTERY[r][o][1], 1, 0.5, 0)
-                GameTooltip:AddLine(MASTERY[r][o][2], 1, 1, 1, true)
-                if self.mine then GameTooltip:AddLine("Chosen. The other one can be chosen instead, out of combat.", 0.4, 1, 0.4, true)
-                elseif not self.open then GameTooltip:AddLine(string.format("Mastery rank %d: %d Mastery.", r, asc.at[r] or 0), 1, 0.3, 0.3, true)
-                else GameTooltip:AddLine("Click to choose it (free, any time out of combat).", 0.6, 0.6, 0.6, true) end
-                GameTooltip:Show()
-            end)
-            b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-            col.buttons[o] = b
-        end
-        mCols[r] = col
-    end
-    local mFoot = mf:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    mFoot:SetPoint("BOTTOMLEFT", 12, 8)
-    mFoot:SetWidth(596)
-    mFoot:SetJustifyH("LEFT")
-    mFoot:SetText("Mastery comes from kills while an Ascendancy is chosen (bosses most). Each of your four keeps its own.")
 
-    local function RefreshMastery()
-        local a = asc.list[asc.chosen]
-        local m = asc.mastery[asc.chosen]
-        if not a or not m then
-            mTitle:SetText("Mastery")
-            mEmpty:SetText(asc.level >= asc.need and "Choose an Ascendancy above to earn its Mastery: five ranks, each a choice of two."
-                or "Each Ascendancy grows with use: five ranks of Mastery, each a choice of two.")
-            mEmpty:Show()
-            mBar:Hide()
-            for _, col in ipairs(mCols) do col.label:Hide() for _, b in ipairs(col.buttons) do b:Hide() end end
-            return
-        end
-        mEmpty:Hide()
-        mBar:Show()
-        mTitle:SetText(string.format("%s Mastery: rank %d of 5", a.name, m.rank))
-        local nextAt = asc.at[m.rank + 1]
-        if nextAt then
-            local from = m.rank > 0 and asc.at[m.rank] or 0
-            mBar:SetValue(math.max(0, math.min(1, (m.points - from) / math.max(1, nextAt - from))))
-            mBarText:SetText(string.format("%d / %d to rank %d", m.points, nextAt, m.rank + 1))
-        else
-            mBar:SetValue(1)
-            mBarText:SetText(string.format("%d: mastered", m.points))
-        end
-        for r, col in ipairs(mCols) do
-            local open = m.rank >= r
-            col.label:SetText(open and string.format("|cffff8000Rank %d|r", r) or string.format("|cff808080Rank %d  (%d)|r", r, asc.at[r] or 0))
-            col.label:Show()
-            for o, b in ipairs(col.buttons) do
-                b.open, b.mine = open, open and m.picks[r] == o
-                b:Show()
-                if open then b:Enable() else b:Disable() end
-                if b.mine then
-                    b:LockHighlight()
-                    b:SetText("|cffff8000" .. MASTERY[r][o][1] .. "|r")
-                else
-                    b:UnlockHighlight()
-                    b:SetText(MASTERY[r][o][1])
-                end
+    -- ---- the six notables of the one shown
+    local nodes = {}
+    for k = 1, 6 do
+        local n = CreateFrame("Button", nil, f)
+        Size(n, 360, 112)
+        local col, row = (k - 1) % 2, math.floor((k - 1) / 2)
+        n:SetPoint("TOPLEFT", 22 + col * 376, -168 - row * 122)
+        n:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        local icon = n:CreateTexture(nil, "ARTWORK")
+        Size(icon, 40, 40)
+        icon:SetPoint("TOPLEFT", 10, -10)
+        n.icon = icon
+        local ring = n:CreateTexture(nil, "OVERLAY")
+        ring:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+        ring:SetBlendMode("ADD")
+        Size(ring, 72, 72)
+        ring:SetPoint("CENTER", icon, "CENTER")
+        n.ring = ring
+        local name = n:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 0)
+        name:SetWidth(290)
+        name:SetJustifyH("LEFT")
+        n.name = name
+        local text = n:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        text:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
+        text:SetWidth(292)
+        text:SetHeight(64)
+        text:SetJustifyH("LEFT")
+        text:SetJustifyV("TOP")
+        n.text = text
+        local state = n:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        state:SetPoint("BOTTOMLEFT", 10, 8)
+        n.state = state
+        n.k = k
+        n:SetScript("OnClick", function(self)
+            if asc.view ~= asc.chosen then
+                UIErrorsFrame:AddMessage("Ascend as this one first (the button below).", 1, 0.3, 0.3)
+                return
             end
-        end
+            Send("JN:" .. self.k)
+        end)
+        nodes[k] = n
     end
 
-    local note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    note:SetPoint("BOTTOM", 0, 18)
-    note:SetWidth(600)
-    note:SetText("An Ascendancy stands on its own: it works with any talents and any keystones. Change it any time out of combat.")
+    -- ---- the foot: points, and what to do
+    local points = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    points:SetPoint("BOTTOMLEFT", 26, 24)
+    points:SetWidth(460)
+    points:SetJustifyH("LEFT")
+    local choose = Button(f, 200, 24, "Ascend")
+    choose:SetPoint("BOTTOMRIGHT", -26, 20)
+    choose:SetScript("OnClick", function()
+        if asc.view == asc.chosen then Send("JC:0") else Send("JC:" .. asc.view) end
+    end)
+    local reset = Button(f, 110, 24, "Unpick all")
+    reset:SetPoint("RIGHT", choose, "LEFT", -8, 0)
+    reset:SetScript("OnClick", function() Send("JR") end)
 
     local function Refresh()
-        local open = asc.level >= asc.need
-        if open then
-            sub:SetText(asc.chosen > 0 and "Your Ascendancy is chosen. You can change it any time out of combat."
-                or "|cff20ff20Choose one.|r Each is a power of its own, on top of everything else you build.")
-        else
-            sub:SetText(string.format("Ascendancies open at |cffff8000level %d|r (you are level %d). A look at what's ahead:", asc.need, asc.level))
-        end
+        local level = (asc.level and asc.level > 0) and asc.level or UnitLevel("player")
+        if asc.view < 1 or asc.view > 3 then asc.view = 1 end
         for i, c in ipairs(cards) do
             local a = asc.list[i]
             if a then
                 c.icon:SetTexture("Interface\\Icons\\" .. (a.icon or "INV_Misc_QuestionMark"))
                 c.name:SetText(a.name)
-                if a.ks and a.ks ~= "" then
-                    c.ks:SetText("Empowers, when on: " .. a.ks)
-                    c.ks:Show()
-                else
-                    c.ks:SetText("")
-                    c.ks:Hide()
-                end
-                c.text:SetText(a.text or "")
-                local mine = asc.chosen == i
-                if mine then
-                    c:SetBackdropColor(0.22, 0.13, 0.02, 0.95)
-                    c:SetBackdropBorderColor(1, 0.5, 0)
-                    local m = asc.mastery[i]
-                    c.state:SetText("|cffff8000Ascended|r" .. (m and m.rank > 0 and ("  |cffffd100Mastery " .. m.rank .. "/5|r") or ""))
-                    c.button:SetText("Give it up")
-                    c.button:SetScript("OnClick", function()
-                        local d = StaticPopup_Show("WORLDTIERS_ASCEND", "Give up " .. a.name .. "?")
-                        if d then d.data = 0 end
-                    end)
-                else
-                    c:SetBackdropColor(0.05, 0.05, 0.08, 0.9)
-                    c:SetBackdropBorderColor(0.5, 0.42, 0.25)
-                    local m = asc.mastery[i]
-                    c.state:SetText(m and m.rank > 0 and ("|cffbbbbbbMastery " .. m.rank .. "/5|r") or "")
-                    c.button:SetText("Ascend")
-                    c.button:SetScript("OnClick", function()
-                        local d = StaticPopup_Show("WORLDTIERS_ASCEND", "Ascend as " .. a.name .. "?" ..
-                            (asc.chosen > 0 and ("\n\n" .. (asc.list[asc.chosen] and asc.list[asc.chosen].name or "Your Ascendancy") .. " is given up.") or ""))
-                        if d then d.data = i end
-                    end)
-                end
-                if open then c.button:Enable() else c.button:Disable() end
+                c.theme:SetText(a.theme or "")
+                c.tag:SetText(i == asc.chosen and "Ascended" or "")
+                if i == asc.view then c:SetBackdropBorderColor(1, 0.5, 0) else c:SetBackdropBorderColor(0.4, 0.4, 0.4) end
                 c:Show()
             else
                 c:Hide()
             end
         end
-        RefreshMastery()
+        local a = asc.list[asc.view]
+        local mine = asc.view == asc.chosen
+        for k, n in ipairs(nodes) do
+            local d = a and a.notes and a.notes[k]
+            if d then
+                n.icon:SetTexture("Interface\\Icons\\" .. (d.icon or "INV_Misc_QuestionMark"))
+                local picked = mine and Picked(k)
+                n.name:SetText((d.skill and "|cffff8000" or "|cffffd100") .. d.name .. "|r" .. (d.skill and "  |cffff8000(skill)|r" or ""))
+                n.text:SetText(d.text or "")
+                n.icon:SetDesaturated(not picked)
+                if picked then
+                    n.ring:SetVertexColor(1, 0.5, 0) n.ring:Show()
+                    n:SetBackdropBorderColor(1, 0.5, 0)
+                    n:SetBackdropColor(0.18, 0.1, 0.02, 0.95)
+                    n.state:SetText("|cff20ff20Picked|r - click to unpick")
+                else
+                    n.ring:Hide()
+                    n:SetBackdropBorderColor(0.35, 0.35, 0.35)
+                    n:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+                    n.state:SetText(not mine and "|cff888888(another Ascendancy)|r"
+                        or (Used() < asc.allowed) and "|cffffd100Click to pick|r" or "|cff888888No point free|r")
+                end
+                n:Show()
+            else
+                n:Hide()
+            end
+        end
+        -- the milestones
+        local marks = {}
+        for i, at in ipairs(asc.at) do
+            marks[i] = (level >= at and "|cff20ff20" or "|cff888888") .. "Level " .. at .. "|r"
+        end
+        points:SetText(string.format("Picked |cffffd100%d of %d|r:  %s", Used(), asc.allowed, table.concat(marks, "  ")))
+        if level < asc.need then
+            sub:SetText(string.format("Your Ascendancy opens at level %d: three for your class, each with six notables to pick from.", asc.need))
+            choose:Disable()
+        else
+            sub:SetText("Choose one of three; pick a notable at each of levels 30, 60, 80 and 100. Free to change out of combat.")
+            choose:Enable()
+        end
+        choose:SetText(mine and "Give it up" or ("Ascend: " .. (a and a.name or "?")))
+        if mine then reset:Show() else reset:Hide() end
     end
+    WT.RefreshAscendancyWindow = Refresh
 
     function WT.OpenAscendancy()
         if f:IsShown() then f:Hide() else f:Show() end
     end
-    f:SetScript("OnShow", function() Send("J") Refresh() end)
+    f:SetScript("OnShow", function()
+        if asc.chosen > 0 then asc.view = asc.chosen end
+        Send("J")
+        Refresh()
+    end)
 
+    local building = nil
     function WT.OnAscMessage(msg)
-        local cmd = msg:match("^(J[AEMT])|")
+        local cmd = msg:match("^(J[AEN])|")
         if not cmd then return false end
-        local p = Split(msg:sub(4), "|")
-        if cmd == "JT" then
-            local at = {}
-            for v in string.gmatch(p[1] or "", "%d+") do at[#at + 1] = tonumber(v) end
-            if #at == 5 then asc.at = at end
-        elseif cmd == "JM" then
-            local slot = tonumber(p[1]) or 0
-            local picks = {}
-            for k = 1, 5 do picks[k] = tonumber((p[4] or ""):sub(k, k)) or 0 end
-            asc.mastery[slot] = { points = tonumber(p[2]) or 0, rank = tonumber(p[3]) or 0, picks = picks }
-        elseif cmd == "JA" then
-            asc.building = asc.building or {}
-            asc.building[tonumber(p[1]) or 0] = { name = p[2] or "?", icon = p[3], ks = p[4], text = p[5] }
+        if cmd == "JA" then
+            local slot, name, icon, theme = msg:match("^JA|(%d+)|([^|]*)|([^|]*)|(.*)$")
+            slot = tonumber(slot) or 0
+            building = building or {}
+            building[slot] = { name = name or "?", icon = icon, theme = theme, text = theme, notes = {} }
+        elseif cmd == "JN" then
+            local slot, k, name, icon, skill, text = msg:match("^JN|(%d+)|(%d+)|([^|]*)|([^|]*)|(%d)|(.*)$")
+            slot, k = tonumber(slot) or 0, tonumber(k) or 0
+            local into = (building and building[slot]) or asc.list[slot]
+            if into and k >= 1 and k <= 6 then
+                into.notes[k] = { name = name, icon = icon, skill = skill == "1", text = text }
+            end
         else
-            asc.list, asc.building = asc.building or asc.list, nil
-            asc.chosen, asc.need, asc.level = tonumber(p[1]) or 0, tonumber(p[2]) or 80, tonumber(p[3]) or 0
+            local chosen, level, allowed, picks, at = msg:match("^JE|(%d+)|(%d+)|(%d+)|([%d,]*)|([%d,]*)")
+            if building then asc.list, building = building, nil end
+            asc.chosen, asc.level, asc.allowed = tonumber(chosen) or 0, tonumber(level) or 0, tonumber(allowed) or 0
+            local p = {}
+            for v in (picks or ""):gmatch("%d+") do p[#p + 1] = tonumber(v) end
+            asc.picks = { p[1] or 0, p[2] or 0, p[3] or 0, p[4] or 0 }
+            local a = {}
+            for v in (at or ""):gmatch("%d+") do a[#a + 1] = tonumber(v) end
+            if #a == 4 then asc.at = a asc.need = a[1] end
             if f:IsShown() then Refresh() end
             if WT.RefreshHubAscendancy then WT.RefreshHubAscendancy() end
         end
         return true
     end
 
-    -- what the World Tiers window shows: the list, the one chosen, when they open
+    -- what the World Tiers window shows: the list, the one chosen, when they open, the picks
     function WT.AscInfo()
-        return asc.list, asc.chosen, asc.need, asc.level, asc.mastery
+        local mastery = {}
+        mastery[asc.chosen] = { rank = Used(), allowed = asc.allowed, picks = asc.picks }
+        return asc.list, asc.chosen, asc.need, asc.level, mastery
     end
     function WT.AskAscendancies() Send("J") end
-    -- once at login, so every window that shows the Ascendancy has it from the start
     local login = CreateFrame("Frame")
     login:RegisterEvent("PLAYER_ENTERING_WORLD")
-    login:SetScript("OnEvent", function(self)
-        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    login:RegisterEvent("PLAYER_LEVEL_UP")
+    login:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_ENTERING_WORLD" then self:UnregisterEvent("PLAYER_ENTERING_WORLD") end
         Send("J")
     end)
     SLASH_WORLDTIERSASCEND1 = "/ascend"
@@ -6883,18 +6850,18 @@ do
         TipOn(iconB, function()
             local a, need = Mine()
             if a then return a.name, a.text end
-            return "Ascendancy", string.format("From level %d: one of four powers for your class, on top of everything else you build.", need or 80)
+            return "Ascendancy", string.format("From level %d: one of three for your class, with six notables to pick from (one at each of levels 30, 60, 80, 100).", need or 30)
         end)
-        TipOn(b, function() return "Ascendancy", "Choose one of four, or change it, and its Mastery: free, any time out of combat. Also /ascend." end)
+        TipOn(b, function() return "Ascendancy", "Choose one of three, or change it, and its notables: free, any time out of combat. Also /ascend." end)
         local function Refresh()
             if not WT.AscInfo then return end
             local a, need, level, m = Mine()
-            need, level = need or 80, (level and level > 0) and level or UnitLevel("player")   -- 0: not heard from the server yet
+            need, level = need or 30, (level and level > 0) and level or UnitLevel("player")   -- 0: not heard from the server yet
             if level < need then
                 icon:SetTexture("Interface\\Icons\\INV_Misc_Key_03")
                 icon:SetDesaturated(true)
                 name:SetText("Opens at level " .. need)
-                text:SetText("One of four powers for your class, on top of everything else you build.")
+                text:SetText("One of three for your class, with six notables: pick one at each of levels 30, 60, 80 and 100.")
                 b:SetText("Preview...")
                 border:Hide()
             elseif a then
@@ -6902,14 +6869,20 @@ do
                 icon:SetDesaturated(false)
                 name:SetText(a.name)
                 -- 0.50: the box is wide enough for all of it now
-                text:SetText((m and m.rank > 0 and string.format("|cffffd100Mastery %d/5.|r ", m.rank) or "") .. (a.text or ""))
+                -- 0.57: the notables picked
+                local picked = {}
+                if m and m.picks and a.notes then
+                    for _, k in ipairs(m.picks) do if k > 0 and a.notes[k] then picked[#picked + 1] = a.notes[k].name end end
+                end
+                text:SetText(string.format("|cffffd100Notables %d/%d:|r %s", m and m.rank or 0, m and m.allowed or 0,
+                    #picked > 0 and table.concat(picked, ", ") or "none yet - open the window to pick") .. "\n\n" .. (a.text or ""))
                 b:SetText("Change...")
                 border:Show()
             else
                 icon:SetTexture("Interface\\Icons\\Spell_Holy_AuraMastery")
                 icon:SetDesaturated(false)
                 name:SetText("Choose an Ascendancy")
-                text:SetText("One of four powers for your class, on top of everything else you build. Free to change out of combat.")
+                text:SetText("One of three for your class, with six notables: pick one at each of levels 30, 60, 80 and 100. Free to change out of combat.")
                 b:SetText("Choose...")
                 border:Hide()
             end
@@ -7150,8 +7123,8 @@ do
                 .. "strikes cleave the enemies around it in front of you (both at half damage).\n"
                 .. "- " .. W .. "On kill" .. E .. ": Corpse Explosion (kills explode), Soul Siphon (kills heal), Cast on Kill and Onslaught support gems, "
                 .. "and uniques that make enemies explode.\n"
-                .. "- " .. W .. "Ascendancies" .. E .. " (from level 80, Overview tab, or /ascend): one of four for your class, "
-                .. "each a big power of its own. Free to change out of combat." },
+                .. "- " .. W .. "Ascendancies" .. E .. " (Overview tab, or /ascend): one of three for your class, each with six notables. "
+                .. "You pick one notable at each of levels 30, 60, 80 and 100; some give a new skill for your bar. Free to change out of combat." },
             { "Dungeons and Raids", G .. "Dungeons and Raids" .. E .. "\n\n"
                 .. "- The " .. W .. "Dungeon Finder" .. E .. " works solo: queue, and you go straight in. Loot is yours, no rolls.\n"
                 .. "- Dungeons and raids are " .. W .. "sized to who is inside" .. E .. ": alone they are made for one, and get harder "
